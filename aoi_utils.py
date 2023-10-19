@@ -1,6 +1,6 @@
 import plotly.express as px
 import h5py
-from Image_Loader  import Image_Loader 
+from Image_Loader import Image_Loader 
 from scipy.ndimage import uniform_filter
 import numpy as np
 import os
@@ -126,12 +126,12 @@ def load_path(thres, path, fsc):
 
     return loader, image_g, image_r, image_b, image_datas
 
-def cal_blob_intensity(loader, coord_list, path, image_datas, fsc):
+def cal_blob_intensity(loader, coord_list, path, image_datas, maxf, minf, fsc):
         coord_lists = []
         coord_lists.append(coord_list)
         drifts = np.zeros(10000)
         space = 0
-        trace_gg, trace_gr, trace_rr, trace_bb, trace_bg, trace_br, i = loader.cal_intensity(coord_lists[0], drifts, space, 0,  0, fsc)
+        trace_gg, trace_gr, trace_rr, trace_bb, trace_bg, trace_br, i = loader.cal_intensity(coord_lists[0], maxf, minf, fsc)
         
         if not os.path.exists(path+r'\raw'):
             os.makedirs(path+r'\raw')

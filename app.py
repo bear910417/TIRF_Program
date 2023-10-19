@@ -1,14 +1,15 @@
 from loader import Loader 
 import numpy as np
 
-from dash import Dash, dcc, html, Input, Output, State, callback_context
+from dash import Dash, dcc, html, Input, Output, State, callback_context, no_update
+from calculate_dtime import calculate_FRET, calculate_conv, gaussian
+from rupture import Rupture
+from draw import draw
 from dash.exceptions import PreventUpdate
 from layout import make_app
-from utils import update_trace, change_trace, select_good_bad, breakpoints_utils, render_good_bad, sl_bkps
+from utils import update_trace, change_trace, select_good_bad, breakpoints_utils, render_good_bad, sl_bkps, show_blob
 from init_fig import init_fig
-import logging
 
-logging.getLogger('werkzeug').setLevel(logging.ERROR)
 path = ''
 fret_g = np.zeros(0)
 fret_b = np.zeros(0)
@@ -29,6 +30,7 @@ N_traces = 0
 total_frame = 0
 idx='N/A'
 new = 0
+blobs = None
 ch_label = 'fret_g'
 fret_g_bkps= []
 fret_b_bkps= []
@@ -57,8 +59,7 @@ color=["#fff",'yellow']
 
 
 
-fig = init_fig() 
-
+fig, fig_blob = init_fig() 
 app = make_app()
 
 @app.callback(
@@ -72,14 +73,16 @@ app = make_app()
     Output('set_bad','style'),
     Output('channel', 'options'),
     Output('graph', 'relayoutData'),
+    Output('g_blob','figure'),
     Input('key_events', 'n_events'),
-    Input('check', 'value'),
+    Input('show', 'value'),
     Input('next', 'n_clicks'),
     Input('previous', 'n_clicks'),
     Input('tr_go', 'n_clicks'),
     Input('dtime','n_clicks'),
     Input('etime','n_clicks'),
     Input('graph', 'clickData'),
+    Input('graph', 'hoverData'),
     Input('AR','value'),
     Input('save_bkps','n_clicks'),
     Input('load_bkps','n_clicks'),
@@ -92,6 +95,7 @@ app = make_app()
     Input('smooth', 'value'),
     Input('rescale', 'n_clicks'),
     Input("graph", "relayoutData"),
+    Input('tabs', 'value'),
     State('i','value'),
     State('path','value'),
     State('channel', 'value'),
@@ -99,25 +103,25 @@ app = make_app()
     )
 
 
-def update_fig(key_events, check, next, previous, go, dtime, etime, clickData, mode, save, load, loadp, rupture, good, bad, select, scatter, smooth, rescale, relayout, i, path, channel, event):
+def update_fig(key_events, show, next, previous, go, dtime, etime, clickData, hoverData, mode, save, load, loadp, rupture, good, bad, select, scatter, smooth, rescale, relayout, tabs, i, path, channel, event):
     changed_id = [p['prop_id'] for p in callback_context.triggered][0]
-    global N_traces, fig, fig2, idx, total_frame, color, good_style, bad_style, bmode
+    global N_traces, fig, fig2, fig_blob, idx, total_frame, color, good_style, bad_style, bmode
     global new, time_b, N_traces, total_frame, tot_dtime
     global fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b
-    global select_list_g, bkps, ch_label
-
-
+    global select_list_g, bkps, ch_label, blobs
     if ('n_events' in changed_id) and (event['key'] not in ['q','w','z','x']):
         raise PreventUpdate()
     
+    if 'graph.hoverData' in changed_id:
+        if tabs != 'Aois':
+            raise PreventUpdate()
 
     if fig['layout']['uirevision'] == False:
         fig['layout']['uirevision'] = True   
 
     ##load path##
     if 'loadp' in changed_id:
-        fig = init_fig() 
-        fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b, N_traces, total_frame, bkps, select_list_g, ch_label = Loader(path).load_traces()
+        fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b, N_traces, total_frame, bkps, select_list_g, ch_label, blobs = Loader(path).load_traces()
         tot_dtime = []
         i = 0
         new = 1
@@ -156,7 +160,13 @@ def update_fig(key_events, check, next, previous, go, dtime, etime, clickData, m
         
     
     ##update trace##
-    fig = update_trace(fig, relayout, i, scatter, fret_g, fret_b, rr, gg, gr, bb, bg, br, time, bkps, smooth)
+    fig = update_trace(fig, relayout, i, scatter, fret_g, fret_b, rr, gg, gr, bb, bg, br, time, bkps, smooth, show)
+
+    if tabs == 'Aois':
+        fig_blob = show_blob(blobs, fig_blob, smooth, time, i, hoverData)
+        fig_blob_output = fig_blob
+    else:
+        fig_blob_output = no_update
 
     ##Display Information##
     if np.any(np.array(bkps['fret_g'], dtype = object)):
@@ -167,9 +177,11 @@ def update_fig(key_events, check, next, previous, go, dtime, etime, clickData, m
         str_b_bkps = ', '.join(str(round(x[1], 2)) for x in bkps['fret_b'][i])
     else:
         str_b_bkps = ''
-    nnote='Total_traces: '+str(N_traces)
+    nnote='Total_traces: ' + str(N_traces)
+
     
-    return fig, i, str_g_bkps, str_b_bkps, mode, nnote, good_style, bad_style, ch_label, relayout
+    return fig, i, str_g_bkps, str_b_bkps, mode, nnote, good_style, bad_style, ch_label, relayout, fig_blob_output
+
 
 
 
@@ -232,7 +244,8 @@ def update_fig(key_events, check, next, previous, go, dtime, etime, clickData, m
         
 server = app.server 
 if __name__ == '__main__':
-   app.run_server(debug = False)
+   app.run_server(debug = False
+                  )
 
 
 
