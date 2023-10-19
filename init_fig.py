@@ -1,5 +1,6 @@
 import plotly.graph_objects as go
 import numpy as np
+import plotly.express as px
 
 def init_fig():
 
@@ -66,7 +67,7 @@ def init_fig():
             showticklabels=True,
             griddash='longdash',
             dtick = 0.1,
-            showspikes = True,
+            showspikes=True,
             autorange = False,
             range = [0, 1]
 
@@ -79,7 +80,7 @@ def init_fig():
             showticklabels=True,
             griddash='longdash',
             dtick = 0.1,
-            showspikes = True,
+            showspikes=True,
             autorange = False,
             range = [0, 1]
 
@@ -107,11 +108,44 @@ def init_fig():
         
         autosize = True,
         showlegend = False,
+        hovermode =  "x unified",
         xaxis_title='time (s)',
         yaxis_title='FRET'
     )
 
    
+
+    fig_blob = px.imshow(np.zeros((9, 54)), color_continuous_scale='gray', zmin = 0, zmax = 128)
+    fig_blob.update_layout(
+    xaxis=dict(
+        showline=True,
+        range=(-0.5, 53.5),
+        showticklabels = False,
+        autorange =  False,
+    ),
+    
+    yaxis=dict(
+        showline=True,
+        range = (-0.5, 8.5),
+        showticklabels = False, 
+        autorange =  False
+    ),
+    width = 2400, 
+    height = 400,
+    #autosize = True,
+    uirevision = True,
+    coloraxis_showscale = False
+)
+    for i in range (1, 6):
+        fig_blob.add_vline(x = 9 * i - 0.5)
+
+    fig_blob.add_annotation(x = 4, y = 7, showarrow = False, text = "BB", font = dict(size=16, color = "#ADD8E6"))
+    fig_blob.add_annotation(x = 13, y = 7, showarrow = False, text = "BG", font = dict(size=16, color = "#ADD8E6"))
+    fig_blob.add_annotation(x = 22, y = 7, showarrow = False, text = "BR", font = dict(size=16, color = "#ADD8E6"))
+    fig_blob.add_annotation(x = 31, y = 7, showarrow = False, text = "GG", font = dict(size=16, color = "#90EE90"))
+    fig_blob.add_annotation(x = 40, y = 7, showarrow = False, text = "GR", font = dict(size=16, color = "#90EE90"))
+    fig_blob.add_annotation(x = 49, y = 7, showarrow = False, text = "RR", font = dict(size=16, color = "#FFCCCB"))
+
     
 
     fig2 = go.FigureWidget()
@@ -136,4 +170,4 @@ def init_fig():
         xaxis_title='FRET',
     )
     
-    return fig
+    return fig, fig_blob

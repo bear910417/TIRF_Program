@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from pathlib import Path
 
 class Loader :
     
@@ -48,6 +49,13 @@ class Loader :
         except:
             select_list_g = np.zeros(N_traces)
         
+        blob_path = (Path(self.path).parent.parent.absolute()) / 'blobs.npz'
+        try:
+            blobs = np.load(blob_path)
+        except:
+            blobs = None
+
+
         ch_label = []
         if np.any(fret_b):
             ch_label.append('fret_b')
@@ -60,5 +68,5 @@ class Loader :
         if np.any(rr):
             ch_label.append('r')
 
-        return fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b, N_traces, total_frame, bkps, select_list_g, ch_label
+        return fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b, N_traces, total_frame, bkps, select_list_g, ch_label, blobs
     

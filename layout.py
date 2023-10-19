@@ -9,22 +9,22 @@ def make_app():
     app.layout = html.Div([
         html.H2('Trace Viewer',style={'textAlign': 'center', 'padding': 5}),
         EventListener(id = 'key_events', events = events),    
-        dcc.Graph(id="graph", config = {'doubleClick' : 'false'}),
-        
-        dcc.Tabs(id='tabs-example-1', value='tab-1', children=[
-        dcc.Tab(label='Tools', children=[          
+        dcc.Graph(id="graph", config = {'doubleClick' : 'false'}),     
+        dcc.Tabs(id='tabs', value='Tools', children=[
+        dcc.Tab(label = 'Tools', value = 'Tools', children=[          
             html.Div([
-                html.Div('Autoscale:', style={"margin-left": "60px",'padding': 5 }),
+                html.Div('Hide Trace:', style={"margin-left": "60px",'padding': 5 }),
                 html.Div([dcc.Checklist(
-                        ['T/B', 'G/R', 'FRET'],
-                        [],
-                        inline=True,
-                        inputStyle={"margin-left": "20px"},
-                        id='check'
+                        ['BB', 'BG', 'BR', 'GG', 'GR', 'RR', 'FRET BG', 'FRET GR', 'Tot B', 'Tot G'],
+                        ['Tot B', 'Tot G'],
+                        inline = True,
+                        inputStyle={"margin-left": "10px"},
+                        id='show',
+                        persistence = True
                         )],
                         style={'padding': 5}),  
                 html.Div('Smoothing',style={"margin-left": "10px"}),
-                dcc.Input(1, type = 'number', min = 1, step = 1, id = 'smooth', style={"margin-left": "10px", 'width': '50px'}), 
+                dcc.Input(1, type = 'number', min = 1, step = 1, id = 'smooth', persistence = 'True', style={"margin-left": "10px", 'width': '50px'}), 
                 html.Div('Scatter:', style={"margin-left": "20px",'padding': 5 }),
                 daq.ToggleSwitch(id = 'scatter', value = 0, color = 'green', style={"margin-left": "10px",'padding': 5}), 
 
@@ -35,7 +35,7 @@ def make_app():
                             id='AR',
                             labelStyle={'display': 'inline-block', 'marginTop': '5px'}
                         )
-                    ],style={'padding': 5, "margin-left": '50%'})
+                    ],style={'padding': 5, "margin-left": '40%'})
                     
                 ], style={'display': 'flex', 'flex-direction': 'row', 'align-items' : 'center'}),
         
@@ -51,7 +51,7 @@ def make_app():
 
             html.Div([dcc.Input(id = "bkp", type="text", placeholder="", style={'textAlign': 'center'},size='20'),
                     dcc.Input(id = "b_bkp", type="text", placeholder="", style={'textAlign': 'center'},size='20'),
-                    dcc.Input(value = 0, id = "i", type="text", placeholder="", style={'textAlign': 'center'}, size='3'),
+                    dcc.Input(value = 0, id = "i", type="text", placeholder="", style={'textAlign': 'center'}, size='3', persistence = 'True'),
                     html.Button('Go', id='tr_go'),
                     dcc.Loading(id="loading1",type="default", children = html.Div('Total_traces: '+ str(0), id='N_traces',style={"margin-left": "10px"}))],
                     style={'padding': 5,"margin-left": "60px", 'display': 'flex', 'flex-direction': 'row'}),
@@ -65,19 +65,30 @@ def make_app():
             ],style={'padding': 5,"margin-left": "60px", 'display': 'flex', 'flex-direction': 'row'}),
             
             html.Div([
-
                 html.Div('Path:'),
                 dcc.Input(id="path", type="text", placeholder="", style={'textAlign': 'left'}, size='50', persistence = 'True'),
                 html.Button('Load', id='loadp')
-
                 ],style={'padding': 5,"margin-left": "60px", 'display': 'flex', 'flex-direction': 'row'}),
         ], style = {'width': '95%', 'height' : '20%', 'padding' : 5}),
-        
-        dcc.Tab(label='Aois', children=[    
 
-        ]),
+
+
+
+        dcc.Tab(label='Aois', value = 'Aois', children=[  
+            html.Div([ 
+
+            dcc.Graph(id = "g_blob", config={'displayModeBar': False, 'staticPlot' : True}) 
+
+            ],style={'padding': 5, 'display': 'flex', 'flex-direction': 'row', 'align-items' : 'left'})
+
+        ], style = {'width': '90%', 'height' : '20%', 'padding' : 5}),
         ], vertical = True, style = {'width' : "5%", "heigth" : '20%'}, content_style = {'width' : "95%", "heigth" : '20%'}, parent_style ={'width' : "100%", "heigth" : '20%'}),    
-        
+
+
+
+
+
+
         ##############
         html.Div([
             dcc.Loading(id="loading",type="default", children =  dcc.Graph(id="Hist")),

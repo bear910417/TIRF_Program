@@ -12,7 +12,7 @@ import logging
 
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
-thres , mpath, step, minf, maxf, channel, radius, leakage_g, leakage_b, f_lag, lag_b, snap_time_g, snap_time_b, red_intensity, red_time, red, green_intensity, green_time, green, fit, fit_b, GFP_plot, ps, ow = load_config(1)
+thres , mpath, redchi, minf, maxf, channel, radius, leakage_g, leakage_b, f_lag, lag_b, snap_time_g, snap_time_b, red_intensity, red_time, red, green_intensity, green_time, green, fit, fit_b, GFP_plot, ps, ow = load_config(1)
 
 
 anchor = 0
@@ -112,7 +112,7 @@ app.layout = html.Div([
         dbc.Col([
             dcc.Graph(figure=fig, id="graph", style={'width': 1024, 'height': 1024}, config = {'scrollZoom': True, 'modebar_remove' : ['box select', 'lasso select']} ),
             html.Div([html.Div(frame_slider, style={'width': 900}), 
-            dcc.Input(value = 0, id="anchor", type="text", placeholder="", style={'textAlign': 'center'},size='3')
+            dcc.Input(value = 0, id="anchor", type="text", placeholder="", style={'textAlign': 'center'}, size='3', debounce = 1)
             ],style={"padding" : 5, 'display': 'flex','flex-direction': 'row'}),
         ]),
 
@@ -133,22 +133,30 @@ app.layout = html.Div([
                     html.Div([
                         html.Div('Mapping Path : '),
                         dcc.Input(value= mpath, id="mpath", type="text", placeholder="", style={'textAlign': 'left'}, size= '42', persistence = True),
+                        html.Div('Plot: ', style={"margin-left": "10px", "margin-right": "10px"}),
+                        daq.ToggleSwitch(
+                                            id = 'plot_circle',
+                                            value = 0,
+                                            color = 'green'
+                                        ), 
                     ], style={'padding': 5, 'display': 'flex', 'flex-direction': 'row'}),
 
 
                 ##
                     html.Div([
                         html.Button('Blob and Fit', id='blob', disabled = True),
-                        html.Button(children = html.I(className="bi bi-arrow-left"), id='left'),
-                        html.Button(children = html.I(className="bi bi-arrow-right"), id='right'),
-                        html.Button(children = html.I(className="bi bi-arrow-down"), id='down'),
-                        html.Button(children = html.I(className="bi bi-arrow-up"), id='up'),
-                        html.Div('selector', style={"margin-left": "10px", "margin-right": "10px"}),
-                        html.Div(dcc.Dropdown(['green', 'red', 'blue'], 'green', clearable = False, id = 'selector'), style = {'width': '10vh'}),
-                        html.Div('step', style={"margin-left": "10px"}),
-                        dcc.Input(value = step, id="step", type="text", placeholder="", style={'textAlign': 'center', "margin-left": "8px"}, size= '3'),
+                        html.Button(children = html.I(className="bi bi-arrow-left"), id='left', style = {'display':'none'}),
+                        html.Button(children = html.I(className="bi bi-arrow-right"), id='right', style = {'display':'none'}),
+                        html.Button(children = html.I(className="bi bi-arrow-down"), id='down', style = {'display':'none'}),
+                        html.Button(children = html.I(className="bi bi-arrow-up"), id='up', style = {'display':'none'}),
+                        html.Div('selector', style={"margin-left": "10px", "margin-right": "10px", 'display':'none'}),
+                        html.Div(dcc.Dropdown(['green', 'red', 'blue'], 'green', clearable = False, id = 'selector'), style = {'width': '7vh', 'display':'none'}),
+                        html.Div('Thres', style={"margin-left": "10px"}),
+                        dcc.Input(value = thres, id="thres", type="number", step = 1, placeholder="", style={'textAlign': 'center', "margin-left": "10px", 'width': '40px'}),
+                        html.Div('redchi', style={"margin-left": "10px"}),
+                        dcc.Input(value = redchi, id="redchi", type="text", placeholder="", style={'textAlign': 'center', "margin-left": "8px"}, size= '3'),
                         html.Div('radius', style={"margin-left": "10px"}),
-                        dcc.Input(value = radius, id = "radius", type="text", placeholder="", style={'textAlign': 'center', "margin-left": "8px"}, size= '3'),
+                        dcc.Input(value = radius, id = "radius", type="text", placeholder="", style={'textAlign': 'center', "margin-left": "8px"}, size= '2'),
                        
                     ],style={'padding': 5, 'display': 'flex','flex-direction': 'row'}),
 
@@ -158,9 +166,8 @@ app.layout = html.Div([
                         html.Div(dcc.Dropdown(['green', 'red', 'blue'], 'green', clearable = False, id = 'channel'), style = {'width': '80px', "margin-left": "10px", "margin-right": "10px"}),
                         html.Div('Range'),
                         dcc.Input(value = minf, id="minf", type="number", step = 1, placeholder="minf", persistence = True, style={'textAlign': 'center', "margin-left": "10px", 'width': '80px'}),
-                        dcc.Input(value = maxf, id="maxf", type="number", step = 1, placeholder="maxf", persistence = True, style={'textAlign': 'center', "margin-right": "10px", 'width': '80px'}),
-                        html.Div('Thres'),
-                        dcc.Input(value = thres, id="thres", type="number", step = 1, placeholder="", style={'textAlign': 'center', "margin-left": "10px", "margin-right": "10px", 'width': '40px'}),
+                        dcc.Input(value = maxf, id="maxf", type="number", step = 1, placeholder="maxf", persistence = True, style={'textAlign': 'center', 'width': '80px'}),
+                        html.Button('Autoscale', id='autoscale', disabled = False),
                         html.Button('Cal Intensity', id='cal_intensity', disabled = True),
                     ], style={'padding': 5, 'display': 'flex','flex-direction': 'row'}),    
 
@@ -169,12 +176,13 @@ app.layout = html.Div([
                         dbc.RadioItems(id="aoi_mode", 
                             options=[
                                 {"label": html.I(className = 'bi bi-eraser', style = {'font-size' : 30, 'textAlign': 'center'}, title = 'Remove'), "value": 0, 'title' : 'Remove'},
-                                {"label": html.I(className = 'bi bi-plus-circle', style = {'font-size' : 30, 'textAlign': 'center'}, title = 'Add'), "value": 1},
+                                {"label": html.I(className = 'bi bi-plus-circle', style = {'font-size' : 30, 'textAlign': 'center'}, title = 'Add'), "value": 1, 'disabled' : True},
                                 {"label": html.I(className = 'bi bi-arrow-counterclockwise', style = {'font-size' : 30, 'textAlign': 'center'}, title = 'Undo'), "value": 2},
                                 {"label": html.I(className = 'bi bi-save2', style = {'font-size' : 30, 'textAlign': 'center'}, title = 'save'), "value": 3},
                                 {"label": html.I(className = 'bi bi-upload', style = {'font-size' : 30, 'textAlign': 'center'}, title = 'load'), "value": 4},
                                 {"label": html.I(className = 'bi bi-cart-x', style = {'font-size' : 30, 'textAlign': 'center'}, title = 'clear'), "value": 5},
                             ], value = 0, style={"margin-left": "10px"}, inline=True),
+                        html.Div(0, id = 'aoi_num', style={"margin-left": "10px"}),
                     ], style={'padding': 5, 'display': 'flex','flex-direction': 'row'}),  
                     
                     html.Div([
@@ -207,12 +215,8 @@ app.layout = html.Div([
                                             value = ps,
                                             color = 'green'
                                         ), 
-                                    html.Div('Overwrite', style={"margin-left": "20px", "margin-right": "10px"}),
-                                    daq.ToggleSwitch(
-                                            id = 'ow',
-                                            value = ow,
-                                            color = 'green'
-                                        ), 
+                                    html.Div('Folder', style={"margin-left": "20px", "margin-right": "10px"}),
+                                    dcc.Input(value = int(ow), id = 'ow', type = 'number', step = 1, placeholder="", style={'textAlign': 'center', 'width': '40px'})
                                 ],style={'padding': 10, 'display': 'flex','flex-direction': 'row', 'align-items' : 'center'} ) 
                             ])
                         ], color="light", outline=True, style = {'width': '750px', 'padding' : 5}),
@@ -334,15 +338,18 @@ app.layout = html.Div([
 
 
 @app.callback(Output('graph', 'figure'), 
+            Output('graph', 'clickData'),
             Output('anchor', 'value'),
             Output('blob', 'disabled'),
             Output('cal_intensity', 'disabled'),
+            Output('frame_slider', 'value'),
             Output('frame_slider', 'max'),
             Output("snap_time_g", "max"),
             Output("red_time", "max"),
             Output("snap_time_b", "max"),
             Output("green_time", "max"),
             Output('aoi_mode', "value"),
+            Output('aoi_num', "children"),
             Output("loadp", "title"),
             Output("auto", "n_clicks"),
             Input('graph', 'clickData'),
@@ -353,20 +360,21 @@ app.layout = html.Div([
             Input('left', 'n_clicks'),
             Input('right', 'n_clicks'),
             Input('frame_slider', 'value'),
+            Input('anchor', 'value'),
             Input('loadp', 'n_clicks'),
+            Input('minf', 'value'),
+            Input('maxf', 'value'),
             Input('channel', 'value'),
             Input('cal_intensity', 'n_clicks'),
             Input("openp", "n_clicks"),
             Input("configs", 'value'),
             Input("aoi_mode", 'value'),
-            State('step', 'value'),
+            State('redchi', 'value'),
             State('radius', 'value'),
-            State('anchor', 'value'),
             State('selector', 'value'),
             State('path', 'value'),
             State('mpath', 'value'),
-            State('minf', 'value'),
-            State('maxf', 'value'),
+            State("plot_circle", 'value'),
             State('thres', 'value'),
             State("snap_time_g", "value"),
             State("red_time", "value"),
@@ -374,7 +382,7 @@ app.layout = html.Div([
             
 )
 
-def update_fig(clickData, relayout, blob, up, down, left, right, frame, loadp, channel, cal_intensity, openp, configs, aoi_mode, step, radius, anchor, selector, path, mpath, minf, maxf, thres, snap_time, red_time, auto):
+def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, loadp, minf, maxf, channel, cal_intensity, openp, configs, aoi_mode, redchi, radius, selector, path, mpath, plot, thres, snap_time, red_time, auto):
 
     global  rem_hist, org_size, bac_mode, dr, coord_list, fig, image_g, image_r, image_b, loader, blob_disable, image_datas, fsc
 
@@ -383,15 +391,14 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, loadp, c
     if ('blob' in changed_id): 
         fsc.set("progress", 0)
         loader.gen_dimg(anchor = anchor, mpath = mpath, maxf = maxf, minf= minf, channel = channel, plot = False)
-        coord_list = loader.det_blob(plot = False, fsc = fsc, thres = thres, r = radius)
+        coord_list = loader.det_blob(plot = plot, fsc = fsc, thres = thres, r = radius, redchi_thres = int(redchi))
         coord_list = np.array(coord_list)
         fig = draw_blobs(fig, coord_list, dr)
         fsc.set("stage", 'Blobing Finished')
 
     for move_button in ['up', 'down', 'left', 'right']:
         if (move_button in changed_id):
-            step = float(step)
-            coord_list = move_blobs(coord_list, selector, step, changed_id)
+            coord_list = move_blobs(coord_list, selector, 1, changed_id)
             fig = draw_blobs(fig, coord_list, dr)
 
     if ('loadp' in changed_id):
@@ -406,7 +413,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, loadp, c
 
     if ('cal_intensity' in changed_id):
         fsc.set("cal_progress", 0)
-        cal_blob_intensity(loader, coord_list, path, image_datas, fsc)
+        cal_blob_intensity(loader, coord_list, path, image_datas, maxf, minf, fsc)
         fsc.set("stage", 'Intensity Calculated')
 
     if 'graph' in changed_id:
@@ -428,6 +435,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, loadp, c
                         rem_hist.append(coord_list[remove_id])
                         coord_list = np.delete(coord_list, remove_id, 0) 
                         fig = draw_blobs(fig, coord_list, dr)
+                        
 
 
     #undo oi
@@ -465,23 +473,27 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, loadp, c
         'blue' : image_b
     }
     
+    if 'anchor.value' in changed_id:
+        if int(anchor) < channel_dict[channel].shape[0]:
+            frame = anchor
     fig.update_traces(zmax = maxf, zmin = minf, selector = dict(type = 'heatmap')) 
     fig['data'][0]['z'] = channel_dict[channel][int(frame)]
     fig['layout']['coloraxis']['cmax'] = maxf
     fig['layout']['coloraxis']['cmin'] = minf
-    slider_max = channel_dict[channel].shape[0]
-    snap_g_max = max(channel_dict['green'].shape[0], snap_time_g[1]) 
-    r_max = max(channel_dict['red'].shape[0], red_time[1])
-    snap_b_max = max(channel_dict['blue'].shape[0], snap_time_b[1]) 
-    g_max = max(channel_dict['green'].shape[0], green_time[1])
-    anchor = min(image_g.shape[0]-10, frame)
+    slider_max = channel_dict[channel].shape[0] - 1
+    snap_g_max = max(channel_dict['green'].shape[0]-1, snap_time_g[1]) 
+    r_max = max(channel_dict['red'].shape[0]-1, red_time[1])
+    snap_b_max = max(channel_dict['blue'].shape[0]-1, snap_time_b[1]) 
+    g_max = max(channel_dict['green'].shape[0]-1, green_time[1])
+    anchor = frame
+    aoi_num = coord_list.shape[0]
 
     if fsc.get("mode") != 'auto':
         auto_state = no_update
     else: 
         auto_state = auto + 1
 
-    return fig, anchor, blob_disable, blob_disable, slider_max, snap_g_max, r_max, snap_b_max, g_max, aoi_mode, None, auto_state
+    return fig, None, anchor, blob_disable, blob_disable, anchor, slider_max, snap_g_max, r_max, snap_b_max, g_max, aoi_mode, aoi_num, None, auto_state
 
 
 
@@ -491,7 +503,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, loadp, c
         output = [
         Output('thres', 'value'),
         Output('mpath', 'value'),
-        Output('step', 'value'),
+        Output('redchi', 'value'),
         Output('minf', 'value'),
         Output('maxf', 'value'),
         Output('channel', 'value'),
@@ -517,10 +529,11 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, loadp, c
         inputs = dict(
         configs = Input('configs', 'value'),
         savec = Input('savec', 'n_clicks'),
+        autoscale = Input('autoscale', 'n_clicks'),
         config_data = dict(
         thres = Input('thres', 'value'),
         mpath = Input('mpath', 'value'),
-        step = Input('step', 'value'),
+        redchi = Input('redchi', 'value'),
         minf = Input('minf', 'value'),
         maxf = Input('maxf', 'value'),
         channel = Input('channel', 'value'),
@@ -544,10 +557,17 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, loadp, c
         overwrite = Input('ow', 'value'))
         )
 )
-def load_config_callback(configs, savec, config_data):
-    global bac_mode
+def load_config_callback(configs, savec, autoscale, config_data):
+    global fig
 
     changed_id = [p['prop_id'] for p in callback_context.triggered][0]
+
+    if 'autoscale' in changed_id:
+        maxf = np.max(fig['data'][0]['z'])
+        minf = np.min(fig['data'][0]['z'])
+        config_data['maxf'] = maxf
+        config_data['minf'] = minf
+        return list(config_data.values())
 
     if 'savec' in changed_id:
         save_config(configs, config_data)
@@ -558,6 +578,9 @@ def load_config_callback(configs, savec, config_data):
         if config_data == None:
             raise PreventUpdate
         return config_data
+    else:
+        raise PreventUpdate
+
 
 
 #Show Progress

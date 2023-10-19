@@ -20,16 +20,9 @@ class Fret_kernel:
 
         
     def auto_fret(self, plot=True, fit=True, fit_b = True, GFP_plot =True, fsc = None):
-                n = 0
-                if self.ow == 0:
-                    os.makedirs(self.path + r'/FRET', exist_ok = True)
-                    cdirs = os.listdir(self.path + r'/FRET')
-                    print(cdirs)
-                    while True:
-                        if str(n) not in cdirs:
-                             break
-                        else:
-                             n = n+1
+                
+                n = self.ow    
+                os.makedirs(self.path + r'/FRET', exist_ok = True)
                 print(f'Saving to folder {n}') 
 
                 procr = Processor(n, self.proc_config)
@@ -48,6 +41,7 @@ class Fret_kernel:
         
                 if fit == True:   
                     print(f'Green : Snaping from {snap_time_g[0]} to {snap_time_g[1]}')       
+                    print(fret_g)
                     fitr = GMM(path, fret_g[:, snap_time_g[0]:snap_time_g[1]], select = 1, channel = 'g')
                     fitr.fit(self.proc_config['fit_text'], fsc) 
 
@@ -57,8 +51,8 @@ class Fret_kernel:
                     fitr.fit(self.proc_config['fit_text'], fsc) 
 
                 if GFP_plot == True:
-                    GFPr = GFP(path, self.proc_config['select'])
-                    GFPr.plot(plot)
+                    GFPr = GFP(path)
+                    GFPr.plot(self.lag_g)
                 subprocess.Popen(f'explorer "{path}"')
 
                 try:

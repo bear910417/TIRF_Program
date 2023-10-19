@@ -190,8 +190,10 @@ class Processor:
         path = os.path.join(self.path,'FRET' ,str(self.n))
         if not os.path.exists(path):
             os.makedirs(path)
-        np.save(self.path+f'\\FRET\\{self.n}\\selected_g.npy', self.selected_g)
-        np.save(self.path+f'\\FRET\\{self.n}\\selected_b.npy', self.selected_b)
+
+        if self.ps == 0:
+            np.save(self.path+f'\\FRET\\{self.n}\\selected_g.npy', self.selected_g)
+            np.save(self.path+f'\\FRET\\{self.n}\\selected_b.npy', self.selected_b)
 
         self.avg_gg = avg_gg
         self.avg_gr = avg_gr
