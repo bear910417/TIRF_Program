@@ -49,9 +49,16 @@ def update_trace(fig, relayout, i, scatter, fret_g, fret_b, rr, gg, gr, bb, bg, 
         fig.update_traces(x = [x[1] for x in bkps['fret_g'][i]], y = uf(fret_g[i], lag)[[y[0] for y in bkps['fret_g'][i]]], mode = 'markers', selector = dict(name='fret_g_bkps'))
         
         if ('Tot G' in show):
-            fig.update_layout(yaxis3 = dict(range = (0, np.max(np.concatenate((gg[i], gr[i]))))))
+            if ('RR' in show):
+                fig.update_layout(yaxis3 = dict(range = (0, np.max(np.concatenate((gg[i], gr[i]))))))
+            else:
+                fig.update_layout(yaxis3 = dict(range = (0, np.max(np.concatenate((gg[i], gr[i], rr[i]))))))
         else:
-            fig.update_layout(yaxis3 = dict(range = (0, np.max(gg[i] + gr[i]))))
+            if ('RR' in show):
+                fig.update_layout(yaxis3 = dict(range = (0, np.max(gg[i] + gr[i]))))
+            else:
+                fig.update_layout(yaxis3 = dict(range = (0, np.max(np.concatenate((gg[i] + gr[i], rr[i]))))))
+
 
         
         hfilt_g = (uf_time_g > hist_range[0]) * (uf_time_g < hist_range[1])       

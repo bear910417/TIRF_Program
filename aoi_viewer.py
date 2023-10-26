@@ -157,6 +157,8 @@ app.layout = html.Div([
                         dcc.Input(value = redchi, id="redchi", type="text", placeholder="", style={'textAlign': 'center', "margin-left": "8px"}, size= '3'),
                         html.Div('radius', style={"margin-left": "10px"}),
                         dcc.Input(value = radius, id = "radius", type="text", placeholder="", style={'textAlign': 'center', "margin-left": "8px"}, size= '2'),
+                        html.Div('Reverse', style={"margin-left": "10px"}),
+                        daq.ToggleSwitch(id = 'reverse', value = 0, color = 'green'),  
                        
                     ],style={'padding': 5, 'display': 'flex','flex-direction': 'row'}),
 
@@ -364,6 +366,7 @@ app.layout = html.Div([
             Input('loadp', 'n_clicks'),
             Input('minf', 'value'),
             Input('maxf', 'value'),
+            Input('reverse', 'value'),
             Input('channel', 'value'),
             Input('cal_intensity', 'n_clicks'),
             Input("openp", "n_clicks"),
@@ -382,7 +385,7 @@ app.layout = html.Div([
             
 )
 
-def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, loadp, minf, maxf, channel, cal_intensity, openp, configs, aoi_mode, redchi, radius, selector, path, mpath, plot, thres, snap_time, red_time, auto):
+def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, loadp, minf, maxf, reverse, channel, cal_intensity, openp, configs, aoi_mode, redchi, radius, selector, path, mpath, plot, thres, snap_time, red_time, auto):
 
     global  rem_hist, org_size, bac_mode, dr, coord_list, fig, image_g, image_r, image_b, loader, blob_disable, image_datas, fsc
 
@@ -390,16 +393,16 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
 
     if ('blob' in changed_id): 
         fsc.set("progress", 0)
-        loader.gen_dimg(anchor = anchor, mpath = mpath, maxf = maxf, minf= minf, channel = channel, plot = False)
+        loader.gen_dimg(anchor = anchor, mpath = mpath, maxf = maxf, minf = minf, channel = channel, plot = False)
         coord_list = loader.det_blob(plot = plot, fsc = fsc, thres = thres, r = radius, redchi_thres = int(redchi))
         coord_list = np.array(coord_list)
-        fig = draw_blobs(fig, coord_list, dr)
+        fig = draw_blobs(fig, coord_list, dr, reverse)
         fsc.set("stage", 'Blobing Finished')
 
-    for move_button in ['up', 'down', 'left', 'right']:
-        if (move_button in changed_id):
-            coord_list = move_blobs(coord_list, selector, 1, changed_id)
-            fig = draw_blobs(fig, coord_list, dr)
+    # for move_button in ['up', 'down', 'left', 'right']:
+    #     if (move_button in changed_id):
+    #         coord_list = move_blobs(coord_list, selector, 1, changed_id)
+    #         fig = draw_blobs(fig, coord_list, dr, reverse)
 
     if ('loadp' in changed_id):
         fsc.set("load_progress", '0')
@@ -424,7 +427,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
                     org_size = size
                     dr = radius * size
                     if coord_list.any(): 
-                        fig = draw_blobs(fig, coord_list, dr)
+                        fig = draw_blobs(fig, coord_list, dr, reverse)
             except:
                 pass
 
@@ -434,7 +437,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
                         remove_id = clickData["points"][0]["pointNumber"]
                         rem_hist.append(coord_list[remove_id])
                         coord_list = np.delete(coord_list, remove_id, 0) 
-                        fig = draw_blobs(fig, coord_list, dr)
+                        fig = draw_blobs(fig, coord_list, dr, reverse)
                         
 
 
@@ -444,7 +447,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
         if len(rem_hist) > 0:
             coord_list = np.concatenate((coord_list, rem_hist[-1].reshape(1, 12)), axis = 0)
             rem_hist.pop()
-            fig = draw_blobs(fig, coord_list, dr)
+            fig = draw_blobs(fig, coord_list, dr, reverse)
 
     #save aoi
     if aoi_mode == 3:
@@ -455,17 +458,15 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
     if aoi_mode == 4:
         aoi_mode = 0
         coord_list = np.load(path + r'\\aoi.npy')
-        fig = draw_blobs(fig, coord_list, dr)
+        fig = draw_blobs(fig, coord_list, dr, reverse)
     
     #clear aoi
     if aoi_mode == 5:
         aoi_mode = 0
         coord_list = np.zeros(0)
-        fig = draw_blobs(fig, coord_list, dr)
+        fig = draw_blobs(fig, coord_list, dr, reverse)
     
 
-    if 'channel' in changed_id:
-        frame = 0
 
     channel_dict = {
         'green' : image_g,
@@ -473,10 +474,24 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
         'blue' : image_b
     }
     
+    if 'channel' in changed_id:
+        if frame > channel_dict[channel].shape[0]:
+            frame = 0
+
+
     if 'anchor.value' in changed_id:
         if int(anchor) < channel_dict[channel].shape[0]:
-            frame = anchor
+            frame = int(anchor)
     fig.update_traces(zmax = maxf, zmin = minf, selector = dict(type = 'heatmap')) 
+
+    if 'reverse.value' in changed_id:
+        if int(reverse) == 0:
+            fig['layout']['coloraxis']['colorscale'] = 'gray'
+            fig = draw_blobs(fig, coord_list, dr, reverse)
+        else:
+            fig['layout']['coloraxis']['colorscale'] = 'gray_r'
+            fig = draw_blobs(fig, coord_list, dr, reverse)
+
     fig['data'][0]['z'] = channel_dict[channel][int(frame)]
     fig['layout']['coloraxis']['cmax'] = maxf
     fig['layout']['coloraxis']['cmin'] = minf
@@ -485,7 +500,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
     r_max = max(channel_dict['red'].shape[0]-1, red_time[1])
     snap_b_max = max(channel_dict['blue'].shape[0]-1, snap_time_b[1]) 
     g_max = max(channel_dict['green'].shape[0]-1, green_time[1])
-    anchor = frame
+    anchor = int(frame)
     aoi_num = coord_list.shape[0]
 
     if fsc.get("mode") != 'auto':

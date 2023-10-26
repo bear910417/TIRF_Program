@@ -96,7 +96,7 @@ class GMM:
             
             # Plot the BIC scores
             px = 1/72
-            plt.rcParams["figure.figsize"] = (400*px,225*px)
+            plt.rcParams["figure.figsize"] = (480*px,270*px)
             spl = plt.subplot(2, 1, 1)
             for i, (cv_type, color) in enumerate(zip(cv_types, color_iter)):
                 xpos = np.array(n_components_range) + 0.2 * (i - 2)
