@@ -2,52 +2,117 @@ import numpy as np
 import os
 import time as rtime
 from scipy.ndimage import uniform_filter1d
+from sklearn import mixture 
+from dash.exceptions import PreventUpdate
+from Gaussian_mixture.GMM_custom import GMM
+from math import sqrt
+import matplotlib
+import pickle
 
 def uf(t, lag, axis = -1):
     return uniform_filter1d(t, size = lag, mode = 'nearest', axis = axis)
+def sa(t, lag):
 
-def update_trace(fig, relayout, i, scatter, fret_g, fret_b, rr, gg, gr, bb, bg, br, time, bkps, lag, show):
+    t = t[:t.shape[0] - (t.shape[0] % lag)]
+    t = t.reshape(-1, lag)
+    return np.average(t, axis = 1)
+
+
+def update_trace(fig, relayout, i, scatter, fret_g, fret_b, rr, gg, gr, bb, bg, br, time, hmm_fret_g, bkps, lag, smooth_mode, show):
+    uf_time_b = np.zeros(10)
+    uf_time_g = np.zeros(10)
+    uf_time_r = np.zeros(10)
+
     mode_dict = {
         0 : 'lines',
         1 : 'markers'
     }
+
+
     try:
         hist_range = (relayout['xaxis.range[0]'], relayout['xaxis.range[1]'])
     except:
         hist_range = (0, np.inf)
 
     if np.any(fret_b):
-        uf_time_b = uf(time['b'], lag)
-        fig.update_traces(x = uf_time_b, y = uf(fret_b[i], lag), mode = mode_dict[scatter], visible = ('FRET BG' not in show), selector = dict(name='fret_b'))
-        fig.update_traces(x = uf_time_b, y = uf(bb[i], lag), mode = mode_dict[scatter], visible = ('BB' not in show), selector = dict(name='bb'))
-        fig.update_traces(x = uf_time_b, y = uf(bg[i], lag), mode = mode_dict[scatter], visible = ('BG' not in show), selector = dict(name='bg'))
-        fig.update_traces(x = uf_time_b, y = uf(br[i], lag), mode = mode_dict[scatter], visible = ('BR' not in show), selector = dict(name='br'))
-        
-        fig.update_traces(x = uf_time_b, y = uf(bb[i]+ bg[i]+ br[i], lag), mode = mode_dict[scatter], line = dict(dash = "longdash", width = 2), visible = ('Tot B' not in show), selector = dict(name='tot_b'))
+        if smooth_mode == 'moving':
+            uf_time_b = uf(time['b'], lag)
+            fig.update_traces(x = uf_time_b, y = uf(fret_b[i], lag), mode = mode_dict[scatter], visible = ('FRET BG' not in show), selector = dict(name='fret_b'))
+            fig.update_traces(x = uf_time_b, y = uf(bb[i], lag), mode = mode_dict[scatter], visible = ('BB' not in show), selector = dict(name='bb'))
+            fig.update_traces(x = uf_time_b, y = uf(bg[i], lag), mode = mode_dict[scatter], visible = ('BG' not in show), selector = dict(name='bg'))
+            fig.update_traces(x = uf_time_b, y = uf(br[i], lag), mode = mode_dict[scatter], visible = ('BR' not in show), selector = dict(name='br'))
+            
+            fig.update_traces(x = uf_time_b, y = uf(bb[i]+ bg[i]+ br[i], lag), mode = mode_dict[scatter], line = dict(dash = "longdash", width = 2), visible = ('Tot B' not in show), selector = dict(name='tot_b'))
 
-        fig.update_traces(x = [x[1] for x in bkps['b'][i]], y = uf(bb[i], lag)[[y[0] for y in bkps['b'][i]]], mode = 'markers', selector = dict(name='b_bkps'))
-        fig.update_traces(x = [x[1] for x in bkps['fret_b'][i]], y = uf(fret_b[i], lag)[[y[0] for y in bkps['fret_b'][i]]], mode = 'markers', selector = dict(name='fret_b_bkps'))
+            fig.update_traces(x = uf_time_b[[x[0] for x in bkps['b'][i]]], y = uf(bb[i], lag)[[y[0] for y in bkps['b'][i]]], mode = 'markers', selector = dict(name='b_bkps'))
+            fig.update_traces(x = uf_time_b[[x[0] for x in bkps['fret_b'][i]]], y = uf(fret_b[i], lag)[[y[0] for y in bkps['fret_b'][i]]], mode = 'markers', selector = dict(name='fret_b_bkps'))
+
+            hfilt_b = (uf_time_b > hist_range[0]) * (uf_time_b < hist_range[1])   
+            fig.update_traces(y = uf(fret_b[i], lag)[hfilt_b], selector = dict(name='Histogram_b'))
+
+            if ('Tot B'  in show):
+                fig.update_layout(yaxis4 = dict(range = (0, np.max(np.concatenate((uf(bb[i], lag), uf(bg[i], lag), uf(br[i], lag))))))),
+            else:
+                fig.update_layout(yaxis4 = dict(range = (0, np.max((uf(bb[i], lag) + uf(bg[i], lag) + uf(br[i], lag)))))),
+
+
+        elif smooth_mode == 'strided':
+            sa_time_b = sa(time['b'], lag)
+            fig.update_traces(x = sa_time_b, y = sa(fret_b[i], lag), mode = mode_dict[scatter], visible = ('FRET BG' not in show), selector = dict(name='fret_b'))
+            fig.update_traces(x = sa_time_b, y = sa(bb[i], lag), mode = mode_dict[scatter], visible = ('BB' not in show), selector = dict(name='bb'))
+            fig.update_traces(x = sa_time_b, y = sa(bg[i], lag), mode = mode_dict[scatter], visible = ('BG' not in show), selector = dict(name='bg'))
+            fig.update_traces(x = sa_time_b, y = sa(br[i], lag), mode = mode_dict[scatter], visible = ('BR' not in show), selector = dict(name='br'))
+            
+            fig.update_traces(x = sa_time_b, y = sa(bb[i]+ bg[i]+ br[i], lag), mode = mode_dict[scatter], line = dict(dash = "longdash", width = 2), visible = ('Tot B' not in show), selector = dict(name='tot_b'))
+
+            fig.update_traces(x = sa_time_b[[(x[0] // lag) for x in bkps['b'][i]]], y = sa(bb[i], lag)[[(y[0] // lag) for y in bkps['b'][i]]], mode = 'markers', selector = dict(name='b_bkps'))
+            fig.update_traces(x = sa_time_b[[(x[0] // lag) for x in bkps['fret_b'][i]]], y = sa(fret_b[i], lag)[[(y[0] // lag) for y in bkps['fret_b'][i]]], mode = 'markers', selector = dict(name='fret_b_bkps'))
+
+            hfilt_b = (sa_time_b > hist_range[0]) * (sa_time_b < hist_range[1])   
+           
+            fig.update_traces(y = sa(fret_b[i], lag)[hfilt_b], selector = dict(name='Histogram_b'))
         
-        if ('Tot B'  in show):
-            fig.update_layout(yaxis4 = dict(range = (0, np.max(np.concatenate((bb[i], bg[i], br[i])))))),
-        else:
-            fig.update_layout(yaxis4 = dict(range = (0, np.max((bb[i] + bg[i] + br[i]))))),
+            if ('Tot B'  in show):
+                fig.update_layout(yaxis4 = dict(range = (0, np.max(np.concatenate((sa(bb[i], lag), sa(bg[i], lag), sa(br[i], lag))))))),
+            else:
+                fig.update_layout(yaxis4 = dict(range = (0, np.max((sa(bb[i], lag) + sa(bg[i], lag) + sa(br[i], lag)))))),
+
         
-        hfilt_b = (uf_time_b > hist_range[0]) * (uf_time_b < hist_range[1])
-        
-        fig.update_traces(y = uf(fret_b[i], lag)[hfilt_b], selector = dict(name='Histogram_b'))
+
       
+    else:
+        selectors = ['fret_b', 'bb', 'bg', 'br', 'tot_b', 'b_bkps', 'fret_b_bkps']
+        clear_trace(fig, selectors)
+       
+        
    
     if np.any(fret_g):
-        uf_time_g = uf(time['g'], lag)
-        fig.update_traces(x = uf_time_g, y = uf(fret_g[i], lag), mode = mode_dict[scatter], visible = ('FRET GR' not in show), selector = dict(name='fret_g'))
-        fig.update_traces(x = uf_time_g, y = uf(gg[i], lag), mode = mode_dict[scatter], visible = ('GG' not in show), selector = dict(name='gg'))
-        fig.update_traces(x = uf_time_g, y = uf(gr[i], lag), mode = mode_dict[scatter], visible = ('GR' not in show), selector = dict(name='gr'))
-        fig.update_traces(x = uf_time_g, y = uf(gg[i]+ gr[i], lag), mode = mode_dict[scatter], line = dict(dash = "longdash", width = 2), visible = ('Tot G' not in show), selector = dict(name='tot_g'))
+        if smooth_mode == 'moving':
+            uf_time_g = uf(time['g'], lag)
+            fig.update_traces(x = uf_time_g, y = uf(fret_g[i], lag), mode = mode_dict[scatter], visible = ('FRET GR' not in show), selector = dict(name='fret_g'))
+            fig.update_traces(x = uf_time_g, y = uf(gg[i], lag), mode = mode_dict[scatter], visible = ('GG' not in show), selector = dict(name='gg'))
+            fig.update_traces(x = uf_time_g, y = uf(gr[i], lag), mode = mode_dict[scatter], visible = ('GR' not in show), selector = dict(name='gr'))
+            fig.update_traces(x = uf_time_g, y = uf(gg[i]+ gr[i], lag), mode = mode_dict[scatter], line = dict(dash = "longdash", width = 2), visible = ('Tot G' not in show), selector = dict(name='tot_g'))
 
-        fig.update_traces(x = [x[1] for x in bkps['g'][i]], y = uf(gg[i], lag)[[y[0] for y in bkps['g'][i]]], mode = 'markers', selector = dict(name='g_bkps'))
-        fig.update_traces(x = [x[1] for x in bkps['fret_g'][i]], y = uf(fret_g[i], lag)[[y[0] for y in bkps['fret_g'][i]]], mode = 'markers', selector = dict(name='fret_g_bkps'))
-        
+            fig.update_traces(x = uf_time_g[[x[0] for x in bkps['g'][i]]], y = uf(gg[i], lag)[[y[0] for y in bkps['g'][i]]], mode = 'markers', selector = dict(name='g_bkps'))
+            fig.update_traces(x = uf_time_g[[x[0] for x in bkps['fret_g'][i]]], y = uf(fret_g[i], lag)[[y[0] for y in bkps['fret_g'][i]]], mode = 'markers', selector = dict(name='fret_g_bkps'))
+
+            hfilt_g = (uf_time_g > hist_range[0]) * (uf_time_g < hist_range[1])       
+            fig.update_traces(y = uf(fret_g[i], lag)[hfilt_g], selector = dict(name='Histogram_g'))
+
+        elif smooth_mode == 'strided':
+            sa_time_g = sa(time['g'], lag)
+            fig.update_traces(x = sa_time_g, y = sa(fret_g[i], lag), mode = mode_dict[scatter], visible = ('FRET GR' not in show), selector = dict(name='fret_g'))
+            fig.update_traces(x = sa_time_g, y = sa(gg[i], lag), mode = mode_dict[scatter], visible = ('GG' not in show), selector = dict(name='gg'))
+            fig.update_traces(x = sa_time_g, y = sa(gr[i], lag), mode = mode_dict[scatter], visible = ('GR' not in show), selector = dict(name='gr'))
+            fig.update_traces(x = sa_time_g, y = sa(gg[i]+ gr[i], lag), mode = mode_dict[scatter], line = dict(dash = "longdash", width = 2), visible = ('Tot G' not in show), selector = dict(name='tot_g'))
+
+            fig.update_traces(x = sa_time_g[[(x[0] // lag) for x in bkps['g'][i]]], y = sa(gg[i], lag)[[(y[0] // lag) for y in bkps['g'][i]]], mode = 'markers', selector = dict(name='g_bkps'))
+            fig.update_traces(x = sa_time_g[[(x[0] // lag) for x in bkps['fret_g'][i]]], y = sa(fret_g[i], lag)[[(y[0] // lag) for y in bkps['fret_g'][i]]], mode = 'markers', selector = dict(name='fret_g_bkps'))
+
+            hfilt_g = (sa_time_g > hist_range[0]) * (sa_time_g < hist_range[1])      
+            fig.update_traces(y = sa(fret_g[i], lag)[hfilt_g], selector = dict(name='Histogram_g'))
+
         if ('Tot G' in show):
             if ('RR' in show):
                 fig.update_layout(yaxis3 = dict(range = (0, np.max(np.concatenate((gg[i], gr[i]))))))
@@ -59,16 +124,31 @@ def update_trace(fig, relayout, i, scatter, fret_g, fret_b, rr, gg, gr, bb, bg, 
             else:
                 fig.update_layout(yaxis3 = dict(range = (0, np.max(np.concatenate((gg[i] + gr[i], rr[i]))))))
 
+    else:
+        selectors = ['fret_g', 'gg', 'gr', 'tot_g', 'g_bkps', 'fret_g_bkps']
+        clear_trace(fig, selectors)
 
-        
-        hfilt_g = (uf_time_g > hist_range[0]) * (uf_time_g < hist_range[1])       
-        fig.update_traces(y = uf(fret_g[i], lag)[hfilt_g], selector = dict(name='Histogram_g'))
 
     if np.any(rr):
-        fig.update_traces(x = uf(time['r'], lag), y = uf(rr[i], lag), mode = mode_dict[scatter], visible = ('RR' not in show), selector = dict(name='rr'))
-        fig.update_traces(x = [x[1] for x in bkps['r'][i]], y = uf(rr[i], lag)[[y[0] for y in bkps['r'][i]]], mode = 'markers', selector = dict(name='r_bkps'))
+        if smooth_mode == 'moving':
+            uf_time_r = uf(time['r'], lag)
+            fig.update_traces(x = uf_time_r, y = uf(rr[i], lag), mode = mode_dict[scatter], visible = ('RR' not in show), selector = dict(name='rr'))
+            fig.update_traces(x = uf_time_r[[x[0] for x in bkps['r'][i]]], y = uf(rr[i], lag)[[y[0] for y in bkps['r'][i]]], mode = 'markers', selector = dict(name='r_bkps'))
+        elif smooth_mode == 'strided':
+            sa_time_r = sa(time['r'], lag)
+            fig.update_traces(x = sa_time_r, y = sa(rr[i], lag), mode = mode_dict[scatter], visible = ('RR' not in show), selector = dict(name='rr'))
+            fig.update_traces(x = sa_time_r[[(x[0] // lag) for x in bkps['r'][i]]], y = sa(rr[i], lag)[[(y[0] // lag) for y in bkps['r'][i]]], mode = 'markers', selector = dict(name='r_bkps'))
+
         if not np.any(fret_g):
             fig.update_layout(yaxis3 = dict(range = (0, np.max(rr[i])))),
+    else:
+        selectors = ['rr', 'r_bkps']
+        clear_trace(fig, selectors)
+
+    if np.any(hmm_fret_g[i]):
+        fig.update_traces(x = uf(time['g'], lag)[:hmm_fret_g[i].shape[0]], y = hmm_fret_g[i].reshape(-1), visible = ('HMM' not in show), selector = dict(name='HMM_fret_g'))
+    else:
+        fig.update_traces(x = [], y = [], selector = dict(name='HMM_fret_g'))
 
     
     if np.any(fret_b) or np.any(fret_g) or np.any(rr):
@@ -76,6 +156,11 @@ def update_trace(fig, relayout, i, scatter, fret_g, fret_b, rr, gg, gr, bb, bg, 
 
 
     return fig
+
+def clear_trace(fig, selectors):
+        for s in selectors:
+            fig.update_traces(x = [], y = [], selector = dict(name = s))
+
 
 def change_trace(changed_id, event, i, N_traces, fig):
     if ('next' in changed_id) or (('n_events' in changed_id) and event['key'] == 'w'):
@@ -92,13 +177,14 @@ def change_trace(changed_id, event, i, N_traces, fig):
               
     elif 'tr_go' in changed_id:
        
-        if i.isdigit():
+        try:
             if int(i) < N_traces:
                 i = int(i)
             else:
                 i = 0
-        else:
+        except:
             i = 0
+
         fig.layout.shapes=[]
     
     return i, fig
@@ -143,7 +229,7 @@ def render_good_bad(i, select_list_g):
     return good_style, bad_style
 
 
-def breakpoints_utils(changed_id, clickData, mode, channel, i, time, bkps):
+def breakpoints_utils(changed_id, clickData, mode, channel, i, time, bkps, smooth, smooth_mode):
     trans = {
         0 : 'fret_g',
         1 : 'fret_b',
@@ -162,6 +248,7 @@ def breakpoints_utils(changed_id, clickData, mode, channel, i, time, bkps):
         14: 'r',
     }
 
+    confirm_reset_show = False
     if 'dtime' in changed_id and channel != None:
         if mode == 'Add':
 
@@ -196,17 +283,23 @@ def breakpoints_utils(changed_id, clickData, mode, channel, i, time, bkps):
 
             if mode == 'Add':
                 if c_num <10:
-                    idx = clickData["points"][0]["pointNumber"]
-                    idx_t = time[channel][idx]
+                    if  smooth_mode == 'moving':
+                        idx = clickData["points"][0]["pointNumber"]
+                        idx_t = uf(time[channel], smooth)[idx]
+                    elif smooth_mode == 'strided':
+                        idx = clickData["points"][0]["pointNumber"]
+                        idx_t = sa(time[channel], smooth)[idx]
+                        idx = int(smooth * (idx + 0.5))  
+
                     bkps[channel][i].append((idx, idx_t))
                     bkps[channel][i] = sorted(bkps[channel][i])  
                     #fig.layout.shapes=[]
                     #fig = draw(fig,tot_bkps,i,time_gr,dead_time,color,total_frame)  
                             
-            elif mode == 'Remove':
-                if 10 <= c_num <=14:
+            elif mode == 'Remove':     
+                if 10 <= c_num <=14:        
                     rem_idx = clickData["points"][0]["pointNumber"]
-                    bkps[channel][i].pop(rem_idx)                
+                    bkps[channel][i].pop(rem_idx)            
                     # fig.layout.shapes=[]
                     # fig = draw(fig,tot_bkps,i,time_gr,dead_time,color,total_frame) 
                     
@@ -214,7 +307,7 @@ def breakpoints_utils(changed_id, clickData, mode, channel, i, time, bkps):
                 if 10 <= c_num <=14:
                     exp_idx = clickData["points"][0]["pointNumber"]
                     bkps[channel][i] = [bkps[channel][i][exp_idx]]      
-                    mode = "Add"
+
                     # fig.layout.shapes=[]
                     # fig = draw(fig,tot_bkps,i,time_gr,dead_time,color,total_frame)
     
@@ -236,8 +329,17 @@ def breakpoints_utils(changed_id, clickData, mode, channel, i, time, bkps):
         if channel != None:
             for keys in bkps:
                 bkps[keys][i] = bkps[channel][i]
+    
+    if mode =='Reset':
+        mode = "Add"
+        confirm_reset_show = True
+    
+    if 'confirm-reset' in changed_id:
+        for channel in bkps:
+            for i in range(len(bkps[channel])):
+                bkps[channel][i] = []
 
-    return bkps, mode
+    return bkps, mode, confirm_reset_show
 
 def sl_bkps(changed_id, path, bkps, mode):
     
@@ -269,49 +371,169 @@ def sl_bkps(changed_id, path, bkps, mode):
                 print('File not found')
     return bkps
 
-def show_blob(blobs, fig_blob, smooth, time, i, hoverData):
+def find_chp(changed_id, fret_g, fret_b, rr, gg, gr, bb, bg, br, i, time, select_list_g, 
+             chp_mode_0, chp_comp_0, chp_thres_0, chp_channel_0, chp_target_0, chp_mode_1, chp_comp_1, chp_thres_1, chp_channel_1, chp_target_1,
+             bkps, smooth, smooth_mode):
+    
+    select_list_g = np.array(select_list_g)
+    
+    if 'chp_find_0' in changed_id:
+        channel = chp_channel_0
+        mode = chp_mode_0
+        comp = chp_comp_0
+        thres = chp_thres_0
+        target_mode = chp_target_0
+    elif 'chp_find_1' in changed_id:
+        channel = chp_channel_1
+        mode = chp_mode_1
+        comp = chp_comp_1
+        thres = chp_thres_1
+        target_mode = chp_target_1
+    
+    else:
+        return bkps
+    
+    if target_mode == 'current trace':
+        i_list = [i]
+    elif target_mode == 'all traces':
+        i_list = np.arange(0, locals()[channel].shape[0])
+    elif target_mode == 'all good':
+        i_list = np.arange(0, locals()[channel].shape[0])[select_list_g == 1]
+
+
+    for i in i_list:
+        if  smooth_mode == 'moving':
+            trace = uf(locals()[channel][i], smooth)
+        elif smooth_mode == 'strided':
+            trace = sa(locals()[channel][i], smooth)
+
+        
+        if comp == 'bigger':
+            target = np.where(trace > thres)[0]
+        elif comp == 'smaller':
+            target = np.where(trace < thres)[0]
+        
+        if target.shape[0] < 1:
+            print(f'No valid points found for {i}.')
+            if  smooth_mode == 'moving':
+                target_t = uf(time[channel], smooth)[-1]
+                target = time[channel].shape[0] -1
+            elif smooth_mode == 'strided':
+                target_t = sa(time[channel], smooth)[-1]
+                target = time[channel].shape[0] -1
+                print(target)
+            bkps[channel][i].append((target, target_t))
+            continue
+
+        if mode == 'first':
+            target = target[0]
+        elif mode == 'second':
+            target = target[1]
+        elif mode == 'previous':
+            target = target[0] - 1
+            if target < 0:
+                print(f'The first point meets the threshold for {i}.')
+                target_t = time[channel][0]
+                target = 0
+                bkps[channel][i].append((target, target_t))
+                continue
+
+
+        if  smooth_mode == 'moving':
+            target_t = uf(time[channel], smooth)[target]
+            bkps[channel][i].append((target, target_t))
+        elif smooth_mode == 'strided':
+            target_t = sa(time[channel], smooth)[target]
+            target = int(smooth * (target + 0.5))  
+            bkps[channel][i].append((target, target_t))
+            
+    return bkps
+
+
+
+def show_blob(blobs, fig_blob, smooth, i, hoverData, time, aoi_max):
     if blobs == None or hoverData == None:
         return fig_blob
     
     t = hoverData["points"][0]["x"]
-    b = uf(blobs['b'], smooth, 2)
-    g = uf(blobs['g'], smooth, 2)
-    r = uf(blobs['r'], smooth, 2)
+  
+    b = blobs['b']
+    g = blobs['g']
+    r = blobs['r']
 
     minf = int(blobs['minf'])
-    maxf = int(blobs['maxf'])
+    maxf = max(int(blobs['minf']), int(aoi_max))
+
     
     z_list = []
     if np.any(b):
-        uf_time_b = uf(time['b'], smooth)
-        x = np.abs(uf_time_b - t).argmin()
-        z_list = z_list + [b[i][0][x], b[i][1][x], b[i][2][x]]
+        uf_time_b = uf(time['b'], smooth, 0)
+        x = np.searchsorted(uf_time_b, t)
+        z_list = z_list + [np.average(b[i, 0, x:x+smooth], axis = 0), np.average(b[i, 1, x:x+smooth], axis = 0), np.average(b[i, 2, x:x+smooth], axis = 0)]
     else:
         z_list = z_list + [np.zeros((9, 9)), np.zeros((9, 9)), np.zeros((9, 9))]
 
-    if np.any(g):
-        uf_time_g = uf(time['g'], smooth)
-        x = np.abs(uf_time_g - t).argmin()
-        z_list = z_list + [g[i][0][x], g[i][1][x]]
+    if np.any(g):  
+        uf_time_g = uf(time['g'], smooth, 0) 
+        x = np.searchsorted(uf_time_g, t)
+        z_list = z_list + [np.average(g[i, 0, x:x+smooth], axis = 0), np.average(g[i, 1, x:x+smooth], axis = 0)]
     else:
         z_list = z_list + [np.zeros((9, 9)), np.zeros((9, 9))]
 
     if np.any(r):
-        uf_time_r = uf(time['r'], smooth)
-        x = np.abs(uf_time_r - t).argmin()
-        z_list = z_list + [r[i][0][x]]
+        uf_time_r = uf(time['r'], smooth, 0)
+        x = np.searchsorted(uf_time_r, t)
+        z_list = z_list + [np.average(r[i, 0, x:x+smooth], axis = 0)]
     else:
         z_list = z_list + [np.zeros((9, 9))]
 
     z = np.concatenate(z_list, axis = 1)
 
-
+    fig_blob['layout']['coloraxis']['colorscale'] = 'gray'
     fig_blob.update_traces(zmax = maxf, zmin = minf, selector = dict(type = 'heatmap')) 
     fig_blob['data'][0]['z'] = z
     fig_blob['layout']['coloraxis']['cmax'] = maxf
     fig_blob['layout']['coloraxis']['cmin'] = minf
 
     return fig_blob
+
+
+def gaussian(x, A, mu1, sigma1):
+    y=A * (1/(sigma1*sqrt(2*np.pi)))*np.exp(-1.0 * (x - mu1)**2 / (2 * sigma1**2))
+    return y
+
+def fit_gmm(FRET_list, select_list, init_means, covariance_type, n_comps):
+
+    gmm = GMM(data = FRET_list, selected = select_list)
+    means, covs, weights, X, n_components = gmm.fit(smooth = 10, init = init_means, covariance_type = covariance_type, n_components = n_comps)
+
+    return means, covs, weights, X, gmm
+
+
+
+def draw_gmm(fig, m, c, w, X):
+    yconvs = np.zeros((100000))
+    xspace = np.linspace(0, 1, 100000)
+    fig.update_traces(x = X.reshape(-1), selector = dict(name='gmm_hist'))
+    fig.data = [list(fig.data)[0]]
+    fig.layout.annotations = []
+
+    if len(c) != len(m):
+        c = np.ones(len(m)) * c
+
+    for i in range(0, m.shape[0]):
+        yconvs = yconvs + gaussian(xspace, w[i],m[i],c[i])
+        fig.add_scatter(x = xspace, y = gaussian(xspace,w[i],m[i],c[i]), name = f'ysep{i}', marker=dict(color='orange'), line = dict(dash ='dash')  )  
+        fig.add_annotation(x = m[i], y=int(np.max(gaussian(xspace,w[i],m[i],c[i]))/2), text = f'{np.round(w[i], 2)*100:.0f}%', showarrow=False, yshift=10)    
+
+    fig.add_scatter(x = xspace, y = yconvs, marker=dict(color='orange'))
+
+    return fig
+
+def save_gmm(gmm, path):
+    matplotlib.use('agg')
+    gmm.plot_and_save(save_path = path)
+
 
 
 

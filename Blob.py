@@ -2,14 +2,14 @@ import numpy as np
 import lmfit
 import matplotlib.pyplot as plt
 
-
 class Blob():
     
-    def __init__(self, raw_blob, M, Mb):
-        self.org_y = int(raw_blob[0])
-        self.org_x = int(raw_blob[1])
-        self.r = 4
-
+    def __init__(self, raw_blob = None, M = None, Mb = None):
+        
+        if np.any(raw_blob):
+            self.org_y = int(raw_blob[0])
+            self.org_x = int(raw_blob[1])
+            self.r = 4
 
         self.coords = np.zeros((3, 2))
 
@@ -37,6 +37,13 @@ class Blob():
 
         self.quality = 1
 
+    def read_dict(self, kwargs):
+        for key, value in kwargs.items():
+            if isinstance(value, list): 
+                value = np.array(value)        
+            setattr(self, key, value)
+       
+
     def affine(self, y, x, M, x_shift = 0):
         x1 = round(M[0][0] * x + M[0][1] * y + M[0][2]) + x_shift
         y1 = round(M[1][0] * x + M[1][1] * y + M[1][2])
@@ -58,15 +65,15 @@ class Blob():
             self.quality = 0
 
         # check red
-        if (self.coords[0][1] - r) < 1 or (self.coords[0][1] + r) > 171 or (self.coords[0][0] - r) < 1 or (self.coords[0][0] + r) > 511:
+        if (self.coords[0][1] - r) < 2 or (self.coords[0][1] + r) > 170 or (self.coords[0][0] - r) < 2 or (self.coords[0][0] + r) > 510:
             self.quality = 0
         
         # check green
-        if (self.coords[1][1] - r) < 172 or (self.coords[1][1] + r) > 341 or (self.coords[1][0] - r) < 1 or (self.coords[1][0] + r) > 511:
+        if (self.coords[1][1] - r) < 173 or (self.coords[1][1] + r) > 340 or (self.coords[1][0] - r) < 2 or (self.coords[1][0] + r) > 510:
             self.quality = 0
 
         #check red
-        if (self.coords[2][1] - r) < 342 or (self.coords[2][1] + r) > 511 or (self.coords[2][0] - r) < 1 or (self.coords[2][0] + r) > 511:
+        if (self.coords[2][1] - r - 1) < 342 or (self.coords[2][1] + r + 1) > 511 or (self.coords[2][0] - r) < 2 or (self.coords[2][0] + r) > 510:
             self.quality = 0
 
     def check_max(self, dcombined_image):
@@ -79,16 +86,23 @@ class Blob():
         if not(-2 < xmax <2 and -2< ymax < 2):
             self.quality = 0
         
-    def set_image(self, image, channel):
-        if channel == 'red':
+    def set_image(self, image, laser):
+        if laser == 'red':
             self.dframe_r = image
-        elif channel == 'green':
+        elif laser == 'green':
             self.dframe_g = image
-        elif channel == 'blue':
+        elif laser == 'blue':
             self.dframe_b = image
-        
+
 
     def set_params(self, ch):
+        channel_dict = {
+            'red' : 0,
+            'green' : 1,
+            'blue' : 2
+        }  
+
+        ch = channel_dict[ch] 
         self.params['centery'].set(value = 4 + self.shift[ch][0], min = 4 + self.shift[ch][0] - 0.5, max = 4 + self.shift[ch][0] + 0.5)
         self.params['centerx'].set(value = 4 + self.shift[ch][1], min = 4 + self.shift[ch][1] - 0.5, max = 4 + self.shift[ch][1] + 0.5)
         self.params['amplitude'].set(value = self.sum[ch], vary = False)
@@ -96,15 +110,24 @@ class Blob():
         self.params['sigmax'].set(value = self.sigma[ch][1], vary = False)
 
         
-    def gaussian_fit(self, ch, nfev = 150):
+    def gaussian_fit(self, ch, nfev = 150, laser = None):
         if self.quality == 0:
             return None
         
-        ch_dict = {0 :  self.dframe_r,
-                    1 :  self.dframe_g,
-                    2 :  self.dframe_b,}
+        channel_dict = {
+            'red' : 0,
+            'green' : 1,
+            'blue' : 2
+        }   
         
-        image = ch_dict[ch]
+        laser_dict = {'red' :  self.dframe_r,
+                    'green' :  self.dframe_g,
+                    'blue' :  self.dframe_b}
+        
+        if laser == None:
+            laser = ch
+        ch = channel_dict[ch] 
+        image = laser_dict[laser]
         thres = np.median(image)*81
         
         r = 4
@@ -136,22 +159,23 @@ class Blob():
                 self.coords[ch] = np.round(self.coords[ch])
                 
 
-    def check_fit(self, redchi_thres):
+    def check_fit(self, redchi_thres, ratio_thres):
         for ch in range(0, 3):
             c1 = (self.redchi[ch] <  redchi_thres or (self.sigma[ch][0] < 3.6 and self.sigma[ch][1] < 3.6)) 
             c2 = self.redchi[ch] <  redchi_thres * 2
-            if not(c1 and c2):
+            c3 = ((max(self.sigma[ch]) / min(self.sigma[ch])) < (max(1, ratio_thres) / min(1, ratio_thres))) or (not np.any(self.sigma[ch]))
+            if not(c1 and c2 and c3):
                 self.quality = 0
 
 
-    def plot_circle(self, dframe_g, dframe_b, i):
+    def plot_circle(self, cpath, dframe_g, dframe_b, i):
         r = 4
-        yr = self.coords[0][0]
-        xr = self.coords[0][1]
-        yg = self.coords[1][0]
-        xg = self.coords[1][1]
-        yb = self.coords[2][0]
-        xb = self.coords[2][1]
+        yr = int(self.coords[0][0])
+        xr = int(self.coords[0][1])
+        yg = int(self.coords[1][0])
+        xg = int(self.coords[1][1])
+        yb = int(self.coords[2][0])
+        xb = int(self.coords[2][1])
 
         fig, axes = plt.subplots(1,3)
         plt.axis('off')
@@ -163,7 +187,7 @@ class Blob():
         axes[0].imshow(dframe_g[yr-r:yr+r+1, xr-r:xr+r+1], cmap='Greys_r', vmin=0, vmax=128)        
         axes[1].imshow(dframe_g[yg-r:yg+r+1, xg-r:xg+r+1], cmap='Greys_r', vmin=0, vmax=128)
         axes[2].imshow(dframe_b[yb-r:yb+r+1, xb-r:xb+r+1], cmap='Greys_r', vmin=0, vmax=160)  
-        plt.savefig(self.cpath+f'\\{i}.tif',dpi=300)
+        plt.savefig(cpath+f'\\{i}.tif',dpi=300)
         plt.close()
 
     def get_coord(self):

@@ -3,16 +3,18 @@ import plotly.graph_objects as go
 from dash import Dash, dcc, callback_context, no_update
 import dash_bootstrap_components as dbc
 import plotly.express as px
-from aoi_utils import draw_blobs, move_blobs, load_path, cal_blob_intensity, cal_FRET_utils, save_config, load_config
+from aoi_utils import draw_blobs, move_blobs, load_path, cal_blob_intensity, cal_FRET_utils, save_config, load_config, save_aoi_utils, load_aoi_utils
 from dash_extensions.enrich import DashProxy, html, Output, Input, State, FileSystemCache, Trigger, CycleBreakerTransform, CycleBreakerInput
 from dash.exceptions import PreventUpdate
 import subprocess
 import dash_daq as daq
 import logging
+import pickle
+
 
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
-thres , mpath, redchi, minf, maxf, channel, radius, leakage_g, leakage_b, f_lag, lag_b, snap_time_g, snap_time_b, red_intensity, red_time, red, green_intensity, green_time, green, fit, fit_b, GFP_plot, ps, ow = load_config(1)
+thres , mpath, redchi, ratio_thres, minf, maxf, channel, radius, leakage_g, leakage_b, f_lag, lag_b, snap_time_g, snap_time_b, red_intensity, red_time, red, green_intensity, green_time, green, fit, fit_b, GFP_plot, ps, ow = load_config(1)
 
 
 anchor = 0
@@ -20,6 +22,7 @@ image_g = np.zeros((1, 512, 512))
 image_r = np.zeros((1, 512, 512))
 image_b = np.zeros((1, 512, 512))
 coord_list = np.zeros(0)
+blob_list = []
 rem_hist = []
 org_size = 1
 dr = radius
@@ -154,7 +157,9 @@ app.layout = html.Div([
                         html.Div('Thres', style={"margin-left": "10px"}),
                         dcc.Input(value = thres, id="thres", type="number", step = 1, placeholder="", style={'textAlign': 'center', "margin-left": "10px", 'width': '40px'}),
                         html.Div('redchi', style={"margin-left": "10px"}),
-                        dcc.Input(value = redchi, id="redchi", type="text", placeholder="", style={'textAlign': 'center', "margin-left": "8px"}, size= '3'),
+                        dcc.Input(value = redchi, id="redchi", type="number", placeholder="", step = 10, style={'textAlign': 'center', "margin-left": "8px", 'width': '60px'}, size= '3'),
+                        html.Div('ratio', style={"margin-left": "10px"}),
+                        dcc.Input(value = ratio_thres, id="ratio_thres", type="number", step = 0.1, placeholder="", style={'textAlign': 'center', "margin-left": "8px", 'width': '60px'}, size= '3'),
                         html.Div('radius', style={"margin-left": "10px"}),
                         dcc.Input(value = radius, id = "radius", type="text", placeholder="", style={'textAlign': 'center', "margin-left": "8px"}, size= '2'),
                         html.Div('Reverse', style={"margin-left": "10px"}),
@@ -353,6 +358,7 @@ app.layout = html.Div([
             Output('aoi_mode', "value"),
             Output('aoi_num', "children"),
             Output("loadp", "title"),
+            Output("FRET", "outline"),
             Output("auto", "n_clicks"),
             Input('graph', 'clickData'),
             Input("graph", "relayoutData"),
@@ -373,6 +379,7 @@ app.layout = html.Div([
             Input("configs", 'value'),
             Input("aoi_mode", 'value'),
             State('redchi', 'value'),
+            State('ratio_thres', 'value'),
             State('radius', 'value'),
             State('selector', 'value'),
             State('path', 'value'),
@@ -385,16 +392,19 @@ app.layout = html.Div([
             
 )
 
-def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, loadp, minf, maxf, reverse, channel, cal_intensity, openp, configs, aoi_mode, redchi, radius, selector, path, mpath, plot, thres, snap_time, red_time, auto):
+def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, loadp, minf, maxf, reverse, channel, cal_intensity, openp, configs, aoi_mode, redchi, ratio_thres, radius, selector, path, mpath, plot, thres, snap_time, red_time, auto):
 
-    global  rem_hist, org_size, bac_mode, dr, coord_list, fig, image_g, image_r, image_b, loader, blob_disable, image_datas, fsc
+    global  rem_hist, org_size, bac_mode, dr, coord_list, blob_list, fig, image_g, image_r, image_b, loader, blob_disable, image_datas, fsc
 
     changed_id = [p['prop_id'] for p in callback_context.triggered][0]
 
     if ('blob' in changed_id): 
         fsc.set("progress", 0)
-        loader.gen_dimg(anchor = anchor, mpath = mpath, maxf = maxf, minf = minf, channel = channel, plot = False)
-        coord_list = loader.det_blob(plot = plot, fsc = fsc, thres = thres, r = radius, redchi_thres = int(redchi))
+        loader.gen_dimg(anchor = anchor, mpath = mpath, maxf = maxf, minf = minf, laser = channel, plot = False)
+        blob_list = loader.det_blob(plot = plot, fsc = fsc, thres = thres, r = radius, redchi_thres = int(redchi), ratio_thres = float(ratio_thres))
+        coord_list = []
+        for b in blob_list:
+            coord_list.append(b.get_coord())
         coord_list = np.array(coord_list)
         fig = draw_blobs(fig, coord_list, dr, reverse)
         fsc.set("stage", 'Blobing Finished')
@@ -452,19 +462,28 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
     #save aoi
     if aoi_mode == 3:
         aoi_mode = 0
-        np.save(path + r'\\aoi.npy', coord_list)
+        save_aoi_utils(blob_list, path + r'\\aoi.dat')
+        # np.save(path + r'\\aoi.npy', coord_list)
+        print("saved_aoi")
       
     #load aoi
     if aoi_mode == 4:
         aoi_mode = 0
-        coord_list = np.load(path + r'\\aoi.npy')
+        blob_list = load_aoi_utils(path + r'\\aoi.dat')
+        coord_list = []
+        for b in blob_list:
+            coord_list.append(b.get_coord())
+        coord_list = np.array(coord_list) 
+        #coord_list = np.load(path + r'\\aoi.npy')
         fig = draw_blobs(fig, coord_list, dr, reverse)
+        print("loaded_aoi")
     
     #clear aoi
     if aoi_mode == 5:
         aoi_mode = 0
         coord_list = np.zeros(0)
         fig = draw_blobs(fig, coord_list, dr, reverse)
+        print("cleared_aoi")
     
 
 
@@ -492,15 +511,15 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
             fig['layout']['coloraxis']['colorscale'] = 'gray_r'
             fig = draw_blobs(fig, coord_list, dr, reverse)
 
-    fig['data'][0]['z'] = channel_dict[channel][int(frame)]
+    fig['data'][0]['z'] = np.average(channel_dict[channel][int(frame):int(frame)+10], axis = 0)
     fig['layout']['coloraxis']['cmax'] = maxf
     fig['layout']['coloraxis']['cmin'] = minf
-    slider_max = channel_dict[channel].shape[0] - 1
+    slider_max = channel_dict[channel].shape[0] 
     snap_g_max = max(channel_dict['green'].shape[0]-1, snap_time_g[1]) 
     r_max = max(channel_dict['red'].shape[0]-1, red_time[1])
     snap_b_max = max(channel_dict['blue'].shape[0]-1, snap_time_b[1]) 
     g_max = max(channel_dict['green'].shape[0]-1, green_time[1])
-    anchor = int(frame)
+    anchor = min(int(frame), channel_dict[channel].shape[0])
     aoi_num = coord_list.shape[0]
 
     if fsc.get("mode") != 'auto':
@@ -508,7 +527,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
     else: 
         auto_state = auto + 1
 
-    return fig, None, anchor, blob_disable, blob_disable, anchor, slider_max, snap_g_max, r_max, snap_b_max, g_max, aoi_mode, aoi_num, None, auto_state
+    return fig, None, anchor, blob_disable, blob_disable, anchor, slider_max, snap_g_max, r_max, snap_b_max, g_max, aoi_mode, aoi_num, None, True, auto_state
 
 
 
@@ -519,6 +538,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
         Output('thres', 'value'),
         Output('mpath', 'value'),
         Output('redchi', 'value'),
+        Output('ratio_thres', 'value'),
         Output('minf', 'value'),
         Output('maxf', 'value'),
         Output('channel', 'value'),
@@ -549,6 +569,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
         thres = Input('thres', 'value'),
         mpath = Input('mpath', 'value'),
         redchi = Input('redchi', 'value'),
+        ratio_thres = Input('ratio_thres', 'value'),
         minf = Input('minf', 'value'),
         maxf = Input('maxf', 'value'),
         channel = Input('channel', 'value'),

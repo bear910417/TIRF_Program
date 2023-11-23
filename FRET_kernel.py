@@ -1,6 +1,6 @@
 from processor import Processor
 from GFP import GFP
-from Gaussian_mixture import GMM
+from Gaussian_mixture.Gaussian_mixture_aoi import GMM
 import numpy as np
 from scipy.ndimage import uniform_filter1d as uf
 import os

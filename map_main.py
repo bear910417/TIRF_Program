@@ -41,8 +41,8 @@ def y_affine(xy,a2,b2,c2):
     y1 = a2 * x + b2 * y + c2
     
     return y1
-path = r'E:\TIRF\20230811 mapping\mapping_1'
-modes = ['g', 'r']
+path = r'D:\TIRF_Program\Bkp_picker\mapping\20231120'
+modes = ['g', 'b']
 segs = 4
 n = 12
 mapper = Glimpse_mapping(path)
@@ -53,7 +53,7 @@ f_xo = []
 
 for seg in range (0, n):
     
-    print(f'processing {seg} / {n}')
+    print(f'processing {seg} / {n-1}')
     coord = []
     image = []
     for mode in modes:

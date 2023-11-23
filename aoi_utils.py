@@ -1,12 +1,13 @@
 import plotly.express as px
 import h5py
 from Image_Loader import Image_Loader 
-from scipy.ndimage import uniform_filter
+from scipy.ndimage import uniform_filter1d as uniform_filter
 import numpy as np
 import os
 from FRET_kernel import Fret_kernel
 import json
 from dash.exceptions import PreventUpdate
+from Blob import Blob
 
 
 
@@ -117,6 +118,8 @@ def move_blobs(coord_list, selector, step, changed_id):
 
     return coord_list
 
+
+
 def load_path(thres, path, fsc):
     time_params = cal(path)
     loader = Image_Loader(0, thres, path, *time_params, 1)
@@ -124,9 +127,13 @@ def load_path(thres, path, fsc):
     image_g = loader.image_g
     image_r = loader.image_r
     image_b = loader.image_b
-    image_g = uniform_filter(image_g, size= (10, 1, 1), mode = 'reflect')
-    image_r = uniform_filter(image_r, size= (10, 1, 1), mode = 'reflect')
-    image_b = uniform_filter(image_b, size= (10, 1, 1), mode = 'reflect')
+    # #image_g = uniform_filter(image_g, size= 10, axis = 0, mode = 'reflect')
+    # image_g = uf(image_g, size= 10)
+    # print(image_g)
+    # print('Uniform Filter b')
+    # image_r = uniform_filter(image_r, size= 10, axis = 0, mode = 'reflect')
+    # print('Uniform Filter r')
+    # image_b = uniform_filter(image_b, size= 10, axis = 0, mode = 'reflect')
     fsc.set("load_progress", '1')
         
 
@@ -193,5 +200,31 @@ def load_config(num, init = False):
         raise PreventUpdate
     return None
 
+def to_dict(b):
+    b.dframe_r = None
+    b.dframe_b = None
+    b.dframe_g = None
+    b.dcombined_image = None    
+    b.params = None        
+    b = b.__dict__
+    for k in b.keys():
+        if isinstance(b[k] ,np.ndarray):
+            b[k] = b[k].tolist()
+    return b
+
+def save_aoi_utils(data, file):
+    with open(file, "w") as outfile:
+            json.dump(data, outfile, default = to_dict)
+
+
+def load_aoi_utils(file):
+    with open(file, 'rb') as f:
+        json_object = json.load(f)
+    blob_list = []
+    for b_dict in json_object:
+        b = Blob()
+        b.read_dict(b_dict) 
+        blob_list.append(b)
+    return blob_list
 
 

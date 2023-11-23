@@ -44,6 +44,7 @@ class Loader :
             'g' : time_g,
             'r' : time_r,
             }
+        
         try:
             select_list_g = np.load(self.path + r'\selected_g.npy', allow_pickle=True)
         except:
@@ -54,6 +55,11 @@ class Loader :
             blobs = np.load(blob_path)
         except:
             blobs = None
+        
+        try:
+            hmm_fret_g = np.load(self.path + r'\HMM_traces\hmm.npz', allow_pickle=True)['hd_states']
+        except:
+            hmm_fret_g = np.zeros_like(fret_g)
 
 
         ch_label = []
@@ -68,5 +74,5 @@ class Loader :
         if np.any(rr):
             ch_label.append('r')
 
-        return fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b, N_traces, total_frame, bkps, select_list_g, ch_label, blobs
+        return fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b, N_traces, total_frame, bkps, select_list_g, ch_label, blobs, hmm_fret_g
     

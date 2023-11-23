@@ -12,6 +12,8 @@ from tqdm import tqdm
 import scipy.ndimage
 import cv2
 from Blob import Blob
+import os
+
 
 
 
@@ -48,7 +50,7 @@ class Image_Loader():
         
         
     def gaussian_peaks(self, offy, offx):
-        gaussian_filter = np.zeros((7,7), dtype=np.float32)
+        gaussian_filter = np.zeros((7,7), dtype = np.float32)
         offy = np.round(offy, 2)
         offx = np.round(offx, 2)
 
@@ -60,7 +62,7 @@ class Image_Loader():
     
     def cal_bac(self, image, nframes, q = 0.5):
         bac = np.zeros((nframes, image.shape[1], image.shape[2]))
-        for bt in range(0,nframes):
+        for bt in tqdm(range(0,nframes)):
                 bac_temp = image[bt]
                 bw = 16 
                 aves = np.zeros((int(self.height / bw),int(self.height / bw)), dtype= np.float32)
@@ -73,6 +75,22 @@ class Image_Loader():
                 bac[bt] = aves
 
         return np.average(bac, axis=0)
+    
+    def cal_bac_med(self, image, size = 31, fsc = None, fsc_anchor = None, fsc_total = None):
+        max = np.max(image)
+        min = np.min(image)
+        image = (image - min) / (max - min) * 255
+        image_8 = np.clip(image, 0, 255).astype(np.uint8)
+        aves = np.zeros_like(image)
+        for bt in tqdm(range(image.shape[0])):
+            bac_temp = image_8[bt]
+            ave = cv2.medianBlur(bac_temp, size)
+            aves[bt] = ave /255 * (max-min) + min
+            try:
+                fsc.set("load_progress", str(fsc_anchor + (bt / image.shape[0] / fsc_total)))
+            except:
+                pass
+        return aves
 
 
     def affine(self, x,y,M):
@@ -152,8 +170,11 @@ class Image_Loader():
         self.r_exists = r_exists
         self.b_exists = b_exists
         self.g_exists = g_exists
+        r_finished = 0
+        g_finished = 0
+        b_finished = 0
+        fsc_total = np.sum(r_exists + b_exists + g_exists)
         bac_mode = self.bac_mode 
-         
 
         
         nframes_true = 0
@@ -175,25 +196,25 @@ class Image_Loader():
             gfilename = str(filenumber[0]) + '.glimpse'
             gfile_path = path_g+r'\\'+gfilename
             time_g, first = self.cal_time_g(path_g, self.g_start, self.g_length)
-            image_g = np.fromfile(gfile_path, dtype=(np.dtype('>i2') , (self.height,self.width)))
-            nframes = min(20, nframes_true)  
+            image_g = np.fromfile(gfile_path, dtype=(np.dtype('>i2') , (self.height, self.width)))
 
-            for n in range (1, 10):
+
+            for n in tqdm(range(1, 10)):
                 try:
                     gfilename = str(n) + '.glimpse'
                     gfile_path = path_g+r'\\'+gfilename
-                    image_g_1 = np.fromfile(gfile_path, dtype=(np.dtype('>i2') , (self.height,self.width)))
-                    image_g = np.concatenate((image_g, image_g_1))
+                    size = os.path.getsize(gfile_path)
+                    if size>0:
+                        image_g_1 = np.fromfile(gfile_path, dtype=(np.dtype('>i2') , (self.height,self.width)))
+                        image_g = np.concatenate((image_g, image_g_1))
                 except:
                     pass
     
             image_g = image_g + 2**15
             print(f'Calculating g Backgrounds with mode {bac_mode}') 
-            self.bac_g = self.cal_bac(image_g, nframes, 0.5) 
-            try:
-                fsc.set("load_progress", '0')
-            except:
-                pass
+            fsc_anchor = 0
+            self.bac_g = self.cal_bac_med(image_g, 27, fsc, fsc_anchor, fsc_total) 
+            
 
         
         #r_exist?
@@ -211,20 +232,22 @@ class Image_Loader():
                 time_r, first = self.cal_time_g(path_r, self.r_start, self.r_length)
             else:
                 time_r = self.cal_time(path_r, self.r_start, self.r_length, first)
-            image_r = np.fromfile(rfile_path, dtype=(np.dtype('>i2') , (self.height,self.width)))
-            nframes = min(20, nframes_true)  
+            image_r = np.fromfile(rfile_path, dtype=(np.dtype('>i2') , (self.height,self.width))) 
             for n in range (1, 10):
                 try:
                     rfilename = str(n) + '.glimpse'
                     rfile_path = path_r + r'\\'+rfilename
-                    image_r_1 = np.fromfile(rfile_path, dtype=(np.dtype('>i2') , (self.height,self.width)))
-                    image_r = np.concatenate((image_r, image_r_1))
+                    size = os.path.getsize(rfile_path)
+                    if size>0:
+                        image_r_1 = np.fromfile(rfile_path, dtype=(np.dtype('>i2') , (self.height,self.width)))
+                        image_r = np.concatenate((image_r, image_r_1))
                 except:
                     pass
             image_r = image_r + 2**15
 
-            print(f'Calculating r Backgrounds with mode {bac_mode}')  
-            self.bac_r = self.cal_bac(image_r, nframes, 0.5) 
+            print(f'Calculating r Backgrounds with mode {bac_mode}')
+            fsc_anchor = (g_finished + r_finished) / (g_exists + r_exists)  
+            self.bac_r = self.cal_bac_med(image_r, 27, fsc, fsc_anchor, fsc_total) 
             try:
                 fsc.set("load_progress", '0')
             except:
@@ -248,20 +271,22 @@ class Image_Loader():
             else:
                 time_b = self.cal_time(path_b, self.b_start, self.b_length, first)
             image_b = np.fromfile(bfile_path, dtype=(np.dtype('>i2') , (self.height, self.width)))
-            nframes = min(20, nframes_true)  
             
             for n in range (1, 10):
                 try:
                     bfilename = str(n) + '.glimpse'
                     bfile_path = path_b+r'\\'+bfilename
-                    image_b_1 = np.fromfile(bfile_path, dtype=(np.dtype('>i2') , (self.height,self.width)))
-                    image_b = np.concatenate((image_b, image_b_1))
+                    size = os.path.getsize(bfile_path)
+                    if size>0:
+                        image_b_1 = np.fromfile(bfile_path, dtype=(np.dtype('>i2') , (self.height,self.width)))
+                        image_b = np.concatenate((image_b, image_b_1))
                 except:
                     pass
 
 
-            image_b = image_b + 2**15      
-            self.bac_b = self.cal_bac(image_b, nframes, 0.5) 
+            image_b = image_b + 2**15   
+            fsc_anchor = (g_finished + r_finished + b_finished) / (g_exists + r_exists + b_exists)  
+            self.bac_b = self.cal_bac_med(image_b, 27, fsc, fsc_anchor, fsc_total) 
         ###
 
 
@@ -274,26 +299,33 @@ class Image_Loader():
         self.b_exists = b_exists
         self.g_exists = g_exists
         self.r_exists = r_exists
+        self.time_g = time_g
+        self.time_r = time_r
+        self.time_b = time_b
         
         return  time_g, time_r, time_b, nframes_true
     
     
     
-    def gen_dimg(self, anchor, mpath, maxf = 420, minf = 178, channel = 'green', plot = True, ch = 'all'):
+    def gen_dimg(self, anchor, mpath, maxf = 420, minf = 178, laser = 'green', plot = True, get_ch = 'all'):
         
+        if mpath == None:
+            mpath = self.mpath
+        self.mpath = mpath
+
         dframe_g = 0
         dframe_b = 0
         dframe_r = 0
         nframes = 20
 
-        if  (self.r_exists == 1 and ch == 'all') or ch == 'red':
+        if  (self.r_exists == 1 and laser == 'red'):
             end = min(self.image_r.shape[0], anchor+nframes)
             start = max(0, end - nframes)
             frame_r = np.average(self.image_r[start:end], axis = 0)
             frame_r = rescale_intensity(frame_r,in_range = (minf,maxf), out_range=np.ubyte)
             dframe_r = bm3d.bm3d(frame_r, 6, stage_arg = bm3d.BM3DStages.HARD_THRESHOLDING)
         
-        if  (self.g_exists == 1 and ch == 'all') or ch == 'green':
+        if  (self.g_exists == 1 and laser == 'green'):
             end = min(self.image_g.shape[0], anchor+nframes)
             start = max(0, end - nframes)
             frame_g = np.average(self.image_g[start:end], axis = 0)
@@ -301,7 +333,7 @@ class Image_Loader():
             dframe_g = bm3d.bm3d(frame_g, 6, stage_arg = bm3d.BM3DStages.HARD_THRESHOLDING)
 
 
-        if  (self.b_exists == 1 and ch == 'all') or ch == 'blue':
+        if  (self.b_exists == 1 and laser == 'blue'):
             end = min(self.image_b.shape[0], anchor+nframes)
             start = max(0, end - nframes)
             frame_b = np.average(self.image_b[start:end], axis = 0)
@@ -310,15 +342,15 @@ class Image_Loader():
 
 
 
-        ch_dict = {'green' :  dframe_g,
+        laser_dict = {'green' :  dframe_g,
                     'blue' :  dframe_b,
                     'red' :  dframe_r
                     }
 
 
-        dframe = ch_dict[channel] 
+        dframe = laser_dict[laser] 
 
-        if ch == 'all':
+        if get_ch == 'all':
             #combine two channel image
             self.M = np.load(mpath + r'\map_g_r.npy')
             self.Mb = np.load(mpath + r'\map_g_b.npy')
@@ -335,10 +367,11 @@ class Image_Loader():
                 
             dcombined_image = (right_image + left_image_trans + blue_image_trans)
             toc = time.perf_counter()
-            print(f"Finished in {toc - self.tic:0.4f} seconds")
+            #print(f"Finished in {toc - self.tic:0.4f} seconds")
             
             
             self.dcombined_image = dcombined_image
+    
         
         self.dframe = dframe
 
@@ -357,18 +390,16 @@ class Image_Loader():
         else:
             self.dframe_r = dframe
         
-        if channel == 'red':
-            return self.dframe_r 
-        elif channel == 'green':
-            return self.dframe_g 
-        elif channel == 'blue':
-            return self.dframe_b 
+        
+
+        if get_ch != 'all':
+            return dframe 
         else:
-            return None
+            return dcombined_image
 
     
     
-    def det_blob(self, plot = False, fsc = None, thres = None, r = 3, redchi_thres = 400):
+    def det_blob(self, plot = False, fsc = None, thres = None, r = 3, redchi_thres = 400, ratio_thres = 1.3):
         if thres != None:
             self.thres = thres
 
@@ -379,18 +410,18 @@ class Image_Loader():
         if plot == True:
             self.plot_circled(blobs_dog)
 
-        params = lmfit.Parameters()
-        params.add('centery', value = 3, min = 2, max = 4)
-        params.add('centerx', value = 3, min = 2, max = 4)
-        params.add('amplitude', value = 5000)
-        params.add('sigmay', value = 3, min = 0, max = 6)
-        params.add('sigmax', value = 3, min = 0, max = 6)
-       
-        coord_list = []
+
         blob_list = []
 
 
 
+        try:
+                fsc.set("cal_progress", str(0))
+        except:
+                pass
+        
+        self.cpath=os.path.join(self.path,r'circled')
+        
         for i, raw_blob in enumerate(tqdm(blobs_dog)):
 
             try:
@@ -402,54 +433,102 @@ class Image_Loader():
             b.map_coord()
             b.check_bound()
 
-            b.set_image(self.dframe_r, 'red')
-            b.set_image(self.dframe_g, 'green')
-            b.set_image(self.dframe_b, 'blue')
+            b.set_image(self.dframe_r, laser = 'red')
+            b.set_image(self.dframe_g, laser = 'green')
+            b.set_image(self.dframe_b, laser = 'blue')
 
             b.check_max(self.dcombined_image)
 
 
 
             if self.r_exists or self.g_exists or self.b_exists:
-                b.gaussian_fit(0)
+                b.gaussian_fit(ch = 'red')
             
             if self.g_exists or self.b_exists:
-                b.gaussian_fit(1)
+                b.gaussian_fit(ch = 'green')
 
             if self.b_exists:
-                b.gaussian_fit(2)
+                b.gaussian_fit(ch = 'blue')
 
-            b.check_fit(redchi_thres)
+            b.check_fit(redchi_thres, ratio_thres)
 
             if b.quality == 1:
-                coord_list.append(b.get_coord())
+                #coord_list.append(b.get_coord())
                 blob_list.append(b)
                 if plot == True:
-                    b.plot_circle(self, self.dframe_g, self.dframe_b, i)
+                    b.plot_circle(self.cpath, self.dframe_g, self.dframe_b, i)
             
-            
-
-        self.blob_list = blob_list
-        print(f'Found {len(coord_list)} filterd blobs')
-        return coord_list
+        print(f'Found {len(blob_list)} filterd blobs')
+        return blob_list
     
-    def cal_drift(self, anchor, channel):
-        image = self.gen_dimg(anchor, mpath = None, maxf = 420, minf = 178, channel = 'green', plot = False, ch = channel)
-        coord_list_drift = []
-        channel_dict = {
-            'red' : 0,
-            'green' : 1,
-            'blue' : 2
+    
+    def cal_drift(self, blob_list, laser, use_ch, n_slices = None, interval = None, anchors = None):
+        
+        
+        tot_coord_list_drift = []
+
+        length_dict = {
+            'red' : self.r_length,
+            'green' : self.g_length,
+            'blue' : self.b_length
         }
+        length = length_dict[laser]
 
-        for b in self.blob_list:
-            b.set_image(image = image, channel = channel)
-            b.set_params(channel_dict[channel])
-            b.check_bound()
-            b.gaussian_fit(channel_dict[channel], nfev = 10)       
-            coord_list_drift.append(b.get_coord())
+        if n_slices == None:
+            if interval == None:
+                if anchors == None:
+                    raise Exception("Please provide either n_slices, interval, or anchors")
+                else:
+                    if isinstance(anchors, list):
+                        anchors = anchors
+                    else:
+                        anchors = [anchors]
+            else:
+                if not isinstance(interval, int):
+                    raise Exception("Please provide an interger interval.")
+                anchors = np.arange(0, length - 10, interval)
+                
+        else:
+            if not isinstance(n_slices, int):
+                raise Exception("Please provide interger slices.")
+            anchors = np.linspace(0, length-10, n_slices).astype(int)
+        
+        if not np.any(anchors):
+                    raise Exception("Length too short!")
+        print(anchors)
 
-        return coord_list_drift
+        if use_ch == 'all':
+            get_ch = 'all'
+            use_ch = 'red'
+        else:
+            get_ch = 'individual'
+
+        for anchor in tqdm(anchors):
+            image = self.gen_dimg(anchor, mpath = None, maxf = 420, minf = 178, laser = laser, plot = False, get_ch = get_ch)
+            blob_list_drift = []
+            coord_list_drift = []
+            
+            for i, b in enumerate(blob_list):
+                b.set_image(image = image, laser = laser)
+                b.set_params(use_ch)
+                b.check_bound()
+                b.gaussian_fit(ch = use_ch, nfev = 10, laser = laser)    
+                blob_list_drift.append(b)
+                coord_list_drift.append(b.get_coord())
+            blob_list = blob_list_drift
+            tot_coord_list_drift.append(coord_list_drift)
+        
+        cont_coord_list_g = np.zeros((self.g_length, len(blob_list), 12))
+        time_g = self.time_g
+        for start in (anchors.shape[0]-1):
+            end = start + 1
+            for b in len(blob_list):
+                d_yx_r = [(tot_coord_list_drift[end][b][0] + tot_coord_list_drift[start][b][6]- tot_coord_list_drift[end][b][0] - tot_coord_list_drift[end][b][6]),
+                        (tot_coord_list_drift[end][b][1] + tot_coord_list_drift[start][b][7]- tot_coord_list_drift[end][b][1] - tot_coord_list_drift[end][b][7])] 
+                
+
+        
+        return tot_coord_list_drift, anchors
 
 
     def cal_intensity(self, coord_list, maxf = 35000, minf = 32946, fsc = None):
@@ -468,10 +547,22 @@ class Image_Loader():
         g_snap = np.zeros((total_blobs, 2, self.g_length, 9, 9))
         r_snap = np.zeros((total_blobs, 1, self.r_length, 9, 9))
 
+        if self.g_exists == 1:
+            bac_g = self.bac_g
+            image_g = (self.image_g - bac_g).astype(np.float32)
+        
+        if self.r_exists == 1:
+            bac_r = self.bac_r
+            image_r = (self.image_r - bac_r).astype(np.float32)
+        
+        if self.b_exists == 1:
+            bac_b = self.bac_b
+            image_b = (self.image_b - bac_b).astype(np.float32)
+
 
         self.cpath=os.path.join(self.path,r'circled')
         os.makedirs(self.cpath+f'\\{self.n_pro}', exist_ok=True)
-        for blob_count, blob in enumerate(coord_list):
+        for blob_count, blob in enumerate(tqdm(coord_list)):
 
             try:
                 fsc.set("cal_progress", str(blob_count / (len(coord_list)-1)))
@@ -491,38 +582,36 @@ class Image_Loader():
 
 
             if self.r_exists ==1:
-                srr = self.gaussian_peaks(ymr, xmr)
-                bac_r = self.expand_bac(self.bac_r, self.r_length)
-                trace_rr[i] = np.sum(2 * srr *(self.image_r[:, yr-r:yr+r+1,xr-r:xr+r+1] - bac_r[:, yr-r:yr+r+1,xr-r:xr+r+1]), axis = (1, 2))
+                srr = 2 * self.gaussian_peaks(ymr, xmr)
+
+                trace_rr[i]  = np.einsum('tyx, yx -> t', image_r[:, yr-r:yr+r+1,xr-r:xr+r+1], srr, optimize = False) 
+                
                 r_snap[blob_count][0] = self.image_r[:, yr-4:yr+4+1,xr-4:xr+4+1]
 
 
             if self.g_exists ==1:
-                sgg = self.gaussian_peaks(ymg, xmg)
-                sgr = self.gaussian_peaks(ymr, xmr)
-                bac_g = self.expand_bac(self.bac_g, self.g_length)
+                sgg = 2 * self.gaussian_peaks(ymg, xmg)
+                sgr = 2 * self.gaussian_peaks(ymr, xmr)
 
-                trace_gg[i] = np.sum(2 * sgg *(self.image_g[:, yg-r:yg+r+1,xg-r:xg+r+1] - bac_g[:, yg-r:yg+r+1,xg-r:xg+r+1]), axis = (1, 2))
+                trace_gg[i]  = np.einsum('tyx, yx -> t', image_g[:, yg-r:yg+r+1,xg-r:xg+r+1], sgg, optimize = False)
+                trace_gr[i]  = np.einsum('tyx, yx -> t', image_g[:, yr-r:yr+r+1,xr-r:xr+r+1], sgr, optimize = False) 
+
                 g_snap[blob_count][0] = self.image_g[:, yg-4:yg+4+1,xg-4:xg+4+1]
-
-                trace_gr[i] = np.sum(2 * sgr *(self.image_g[:, yr-r:yr+r+1,xr-r:xr+r+1]- bac_g[:, yr-r:yr+r+1,xr-r:xr+r+1]), axis = (1, 2))
                 g_snap[blob_count][1] = self.image_g[:, yr-4:yr+4+1,xr-4:xr+4+1]
 
                     
               
             if  self.b_exists == 1:
-                sbb = self.gaussian_peaks(ymb, xmb)
-                sbg = self.gaussian_peaks(ymg, xmg)
-                sbr = self.gaussian_peaks(ymr, xmr)
+                sbb = 2 *self.gaussian_peaks(ymb, xmb)
+                sbg = 2 *self.gaussian_peaks(ymg, xmg)
+                sbr = 2 *self.gaussian_peaks(ymr, xmr)
 
-                bac_b = self.expand_bac(self.bac_b, self.b_length)
-                trace_bb[i] = np.sum(2 * sbb *(self.image_b[:, yb-r:yb+r+1,xb-r:xb+r+1] - bac_b[:, yb-r:yb+r+1,xb-r:xb+r+1]), axis = (1, 2))
+                trace_bb[i] = np.einsum('tyx, yx -> t', image_b[:, yb-r:yb+r+1,xb-r:xb+r+1], sbb, optimize = False)
+                trace_bg[i] = np.einsum('tyx, yx -> t', image_b[:, yg-r:yg+r+1,xg-r:xg+r+1], sbg, optimize = False)
+                trace_br[i] = np.einsum('tyx, yx -> t', image_b[:, yr-r:yr+r+1,xr-r:xr+r+1], sbr, optimize = False) 
+
                 b_snap[blob_count][0] = self.image_b[:, yb-4:yb+4+1,xb-4:xb+4+1]
-
-                trace_bg[i] = np.sum(2 * sbg *(self.image_b[:, yg-r:yg+r+1,xg-r:xg+r+1] - bac_b[:, yg-r:yg+r+1,xg-r:xg+r+1]), axis = (1, 2))
                 b_snap[blob_count][1] = self.image_b[:, yg-4:yg+4+1,xg-4:xg+4+1]
-
-                trace_br[i] = np.sum(2 * sbr *(self.image_b[:, yr-r:yr+r+1,xr-r:xr+r+1] - bac_b[:, yr-r:yr+r+1,xr-r:xr+r+1]), axis = (1, 2))
                 b_snap[blob_count][2] = self.image_b[:, yr-4:yr+4+1,xr-4:xr+4+1]
 
             i = i+1
