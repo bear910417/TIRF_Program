@@ -307,7 +307,7 @@ class Image_Loader():
     
     
     
-    def gen_dimg(self, anchor, mpath, maxf = 420, minf = 178, laser = 'green', plot = True, get_ch = 'all'):
+    def gen_dimg(self, anchor, mpath, maxf = 420, minf = 178, laser = 'green', plot = True):
         
         if mpath == None:
             mpath = self.mpath
@@ -318,14 +318,14 @@ class Image_Loader():
         dframe_r = 0
         nframes = 20
 
-        if  (self.r_exists == 1 and laser == 'red'):
+        if  (self.r_exists == 1):
             end = min(self.image_r.shape[0], anchor+nframes)
             start = max(0, end - nframes)
             frame_r = np.average(self.image_r[start:end], axis = 0)
             frame_r = rescale_intensity(frame_r,in_range = (minf,maxf), out_range=np.ubyte)
             dframe_r = bm3d.bm3d(frame_r, 6, stage_arg = bm3d.BM3DStages.HARD_THRESHOLDING)
         
-        if  (self.g_exists == 1 and laser == 'green'):
+        if  (self.g_exists == 1):
             end = min(self.image_g.shape[0], anchor+nframes)
             start = max(0, end - nframes)
             frame_g = np.average(self.image_g[start:end], axis = 0)
@@ -333,7 +333,7 @@ class Image_Loader():
             dframe_g = bm3d.bm3d(frame_g, 6, stage_arg = bm3d.BM3DStages.HARD_THRESHOLDING)
 
 
-        if  (self.b_exists == 1 and laser == 'blue'):
+        if  (self.b_exists == 1):
             end = min(self.image_b.shape[0], anchor+nframes)
             start = max(0, end - nframes)
             frame_b = np.average(self.image_b[start:end], axis = 0)
@@ -350,29 +350,25 @@ class Image_Loader():
 
         dframe = laser_dict[laser] 
 
-        if get_ch == 'all':
-            #combine two channel image
-            self.M = np.load(mpath + r'\map_g_r.npy')
-            self.Mb = np.load(mpath + r'\map_g_b.npy')
+
+        #combine two channel image
+        self.M = np.load(mpath + r'\map_g_r.npy')
+        self.Mb = np.load(mpath + r'\map_g_b.npy')
 
 
 
-            left_image  = dframe[0:self.height,0:170]
-            right_image = dframe[0:self.height,171:341]
-            blue_image = dframe[0:self.height,342:512]
-            rows, cols = right_image.shape
-            
-            left_image_trans = cv2.warpAffine(left_image, self.M, (cols, rows), flags = cv2.WARP_INVERSE_MAP)
-            blue_image_trans = cv2.warpAffine(blue_image, self.Mb, (cols, rows), flags = cv2.WARP_INVERSE_MAP)
-                
-            dcombined_image = (right_image + left_image_trans + blue_image_trans)
-            toc = time.perf_counter()
-            #print(f"Finished in {toc - self.tic:0.4f} seconds")
-            
-            
-            self.dcombined_image = dcombined_image
-    
+        left_image  = dframe[0:self.height,0:170]
+        right_image = dframe[0:self.height,171:341]
+        blue_image = dframe[0:self.height,342:512]
+        rows, cols = right_image.shape
         
+        left_image_trans = cv2.warpAffine(left_image, self.M, (cols, rows), flags = cv2.WARP_INVERSE_MAP)
+        blue_image_trans = cv2.warpAffine(blue_image, self.Mb, (cols, rows), flags = cv2.WARP_INVERSE_MAP)
+            
+        dcombined_image = (right_image + left_image_trans + blue_image_trans)
+        self.dcombined_image = dcombined_image
+
+    
         self.dframe = dframe
 
         if self.b_exists:
@@ -389,13 +385,9 @@ class Image_Loader():
             self.dframe_r = dframe_r
         else:
             self.dframe_r = dframe
-        
-        
 
-        if get_ch != 'all':
-            return dframe 
-        else:
-            return dcombined_image
+        return dframe, dcombined_image
+
 
     
     
@@ -497,16 +489,18 @@ class Image_Loader():
                     raise Exception("Length too short!")
         print(anchors)
 
-        if use_ch == 'all':
-            get_ch = 'all'
-            use_ch = 'red'
-        else:
-            get_ch = 'individual'
+        
+
 
         for anchor in tqdm(anchors):
-            image = self.gen_dimg(anchor, mpath = None, maxf = 420, minf = 178, laser = laser, plot = False, get_ch = get_ch)
+            images = self.gen_dimg(anchor, mpath = None, maxf = 420, minf = 178, laser = laser, plot = False)
             blob_list_drift = []
             coord_list_drift = []
+            if use_ch == 'all':
+                use_ch = 'red'
+                image = images[1]
+            else:
+                image = images[0]
             
             for i, b in enumerate(blob_list):
                 b.set_image(image = image, laser = laser)

@@ -24,6 +24,7 @@ image_b = np.zeros((1, 512, 512))
 coord_list = np.zeros(0)
 blob_list = []
 rem_hist = []
+rem_hist_blob = []
 org_size = 1
 dr = radius
 loader = None
@@ -394,7 +395,7 @@ app.layout = html.Div([
 
 def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, loadp, minf, maxf, reverse, channel, cal_intensity, openp, configs, aoi_mode, redchi, ratio_thres, radius, selector, path, mpath, plot, thres, snap_time, red_time, auto):
 
-    global  rem_hist, org_size, bac_mode, dr, coord_list, blob_list, fig, image_g, image_r, image_b, loader, blob_disable, image_datas, fsc
+    global  rem_hist, rem_hist_blob, org_size, bac_mode, dr, coord_list, blob_list, fig, image_g, image_r, image_b, loader, blob_disable, image_datas, fsc
 
     changed_id = [p['prop_id'] for p in callback_context.triggered][0]
 
@@ -446,7 +447,9 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
                     if aoi_mode == 0:
                         remove_id = clickData["points"][0]["pointNumber"]
                         rem_hist.append(coord_list[remove_id])
+                        rem_hist_blob.append(blob_list[remove_id])
                         coord_list = np.delete(coord_list, remove_id, 0) 
+                        blob_list.pop(remove_id)
                         fig = draw_blobs(fig, coord_list, dr, reverse)
                         
 
@@ -456,7 +459,9 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
         aoi_mode = 0
         if len(rem_hist) > 0:
             coord_list = np.concatenate((coord_list, rem_hist[-1].reshape(1, 12)), axis = 0)
+            blob_list.append(rem_hist_blob[-1])
             rem_hist.pop()
+            rem_hist_blob.pop()
             fig = draw_blobs(fig, coord_list, dr, reverse)
 
     #save aoi
@@ -481,6 +486,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
     #clear aoi
     if aoi_mode == 5:
         aoi_mode = 0
+        blob_list = []
         coord_list = np.zeros(0)
         fig = draw_blobs(fig, coord_list, dr, reverse)
         print("cleared_aoi")
