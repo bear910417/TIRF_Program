@@ -41,7 +41,7 @@ def y_affine(xy,a2,b2,c2):
     y1 = a2 * x + b2 * y + c2
     
     return y1
-path = r'D:\TIRF_Program\Bkp_picker\mapping\20231120'
+path = r'H:\TIRF\20231215_mapping\1'
 modes = ['g', 'b']
 segs = 4
 n = 12

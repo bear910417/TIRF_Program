@@ -41,7 +41,6 @@ class Fret_kernel:
         
                 if fit == True:   
                     print(f'Green : Snaping from {snap_time_g[0]} to {snap_time_g[1]}')       
-                    print(fret_g)
                     fitr = GMM(path, fret_g[:, snap_time_g[0]:snap_time_g[1]], select = 1, channel = 'g')
                     fitr.fit(self.proc_config['fit_text'], fsc) 
 

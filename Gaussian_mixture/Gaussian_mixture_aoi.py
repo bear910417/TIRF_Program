@@ -27,7 +27,7 @@ class GMM:
                 self.selected = np.ones(data.shape[0])
             
             try:
-                self.bkps = np.load(self.path+r'\\breakpoints.npy',allow_pickle=True)
+                self.bkps = np.load(self.path+r'\\breakpoints_g.npy',allow_pickle=True)
             except:
                 self.bkps = [[-1] for _ in range(data.shape[0])]
                     
@@ -54,7 +54,7 @@ class GMM:
                         end = self.bkps[i][1]
                     else:
                         end = trace.shape[0]
-                    for t in range (0,end):
+                    for t in range(0, end):
                         if (0<=trace[t]<=1):
                             X0.append(trace[t])
                   

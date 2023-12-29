@@ -7,7 +7,6 @@ from skimage.feature import blob_dog
 from math import sqrt
 from skimage.exposure import rescale_intensity
 import os
-import lmfit
 from tqdm import tqdm
 import scipy.ndimage
 import cv2
@@ -77,7 +76,7 @@ class Image_Loader():
         return np.average(bac, axis=0)
     
     def cal_bac_med(self, image, size = 31, fsc = None, fsc_anchor = None, fsc_total = None):
-        max = np.max(image)
+        max = np.quantile(image, 0.9)
         min = np.min(image)
         image = (image - min) / (max - min) * 255
         image_8 = np.clip(image, 0, 255).astype(np.uint8)
@@ -122,6 +121,9 @@ class Image_Loader():
         bac = np.expand_dims(bac, 0)
         bac = np.repeat(bac, length, axis = 0)
         return bac
+    
+    def round_cord(self, coord):
+        return np.concatenate(((coord[:6] + np.round(coord[6:])), (coord[6:] - np.round(coord[6:]))))
     
 
     def cal_time_g(self, path, start, length):
@@ -185,7 +187,7 @@ class Image_Loader():
 
         #g_exist?  
         time_g = np.zeros(10)
-        image_g = np.zeros((10, 512, 512))  
+        image_g = np.zeros((1, 512, 512))  
         if  g_exists == 1:
             
             file = h5py.File(path_g+r'\header.mat','r')
@@ -219,7 +221,7 @@ class Image_Loader():
         
         #r_exist?
         time_r = np.zeros(10)
-        image_r = np.zeros((10, 512, 512))
+        image_r = np.zeros((1, 512, 512))
 
         if  r_exists == 1:
             file = h5py.File(path_r+r'\header.mat','r')
@@ -256,7 +258,7 @@ class Image_Loader():
             
         #b_exist?    
         time_b = np.zeros(10)
-        image_b = np.zeros((10, 512, 512))
+        image_b = np.zeros((1, 512, 512))
 
         if  b_exists == 1:
             print(f'Calculating b Backgrounds with mode {bac_mode}')  
@@ -487,10 +489,6 @@ class Image_Loader():
         
         if not np.any(anchors):
                     raise Exception("Length too short!")
-        print(anchors)
-
-        
-
 
         for anchor in tqdm(anchors):
             images = self.gen_dimg(anchor, mpath = None, maxf = 420, minf = 178, laser = laser, plot = False)
@@ -511,32 +509,191 @@ class Image_Loader():
                 coord_list_drift.append(b.get_coord())
             blob_list = blob_list_drift
             tot_coord_list_drift.append(coord_list_drift)
+            
         
-        cont_coord_list_g = np.zeros((self.g_length, len(blob_list), 12))
-        time_g = self.time_g
-        for start in (anchors.shape[0]-1):
-            end = start + 1
-            for b in len(blob_list):
-                d_yx_r = [(tot_coord_list_drift[end][b][0] + tot_coord_list_drift[start][b][6]- tot_coord_list_drift[end][b][0] - tot_coord_list_drift[end][b][6]),
-                        (tot_coord_list_drift[end][b][1] + tot_coord_list_drift[start][b][7]- tot_coord_list_drift[end][b][1] - tot_coord_list_drift[end][b][7])] 
-                
+        cont_coord_list_g = np.zeros((len(blob_list), self.g_length, 12))
+        cont_coord_list_b = np.zeros((len(blob_list), self.b_length, 12))
+        cont_coord_list_r = np.zeros((len(blob_list), self.r_length, 12))
 
+        time_dict = {
+            'red' : self.time_r,
+            'green' : self.time_g,    
+            'blue' : self.time_b
+        }
         
-        return tot_coord_list_drift, anchors
+        
+        for start in range(anchors.shape[0]-1):
+            end = start + 1
+            for b in range(len(blob_list)):
+                delta_yx = np.array([(tot_coord_list_drift[end][b][0] + tot_coord_list_drift[end][b][6]- tot_coord_list_drift[start][b][0] - tot_coord_list_drift[start][b][6]),
+                        (tot_coord_list_drift[end][b][1] + tot_coord_list_drift[end][b][7]- tot_coord_list_drift[start][b][1] - tot_coord_list_drift[start][b][7])])
+                dt = time_dict[laser][anchors[end]] - time_dict[laser][anchors[start]]
+                d_yx = delta_yx / dt
+                d_yx_r = d_yx
+                d_yx_g = np.matmul(self.M[:, :2], d_yx.T)
+                d_yx_b = np.matmul(self.Mb[:, :2], d_yx.T)
+                d_yx_tot = np.array([0, 0, 0, 0, 0, 0, *d_yx_r, *d_yx_g, *d_yx_b])
+
+                t_start = time_dict[laser][anchors[start]]
+                t_end = time_dict[laser][anchors[end]]
+
+                #r
+                if self.r_exists:
+                    r_start = np.searchsorted(time_dict['red'], t_start)
+                    r_end = np.searchsorted(time_dict['red'], t_end)
+                    cont_coord_list_r[b][0] = tot_coord_list_drift[0][b]
+                    for t in range(r_start, r_end+1):
+                        dt =  time_dict['red'][t] - t_start
+                        cont_coord_list_r[b][t] = cont_coord_list_r[b][r_start] + d_yx_tot * dt
+                        cont_coord_list_r[b][t] = self.round_cord(cont_coord_list_r[b][t])
+                    if start == anchors.shape[0]-2:
+                        for t in range(r_end+1, self.r_length):
+                            dt =  time_dict['red'][t] - t_start
+                            cont_coord_list_r[b][t] = cont_coord_list_r[b][r_start] + d_yx_tot * dt
+                            cont_coord_list_r[b][t] = self.round_cord(cont_coord_list_r[b][t])
+                
+                #g 
+                if self.g_exists:
+                    g_start = np.searchsorted(time_dict['green'], t_start)
+                    g_end = np.searchsorted(time_dict['green'], t_end)
+                    cont_coord_list_g[b][0] = tot_coord_list_drift[0][b]
+                    for t in range(g_start, g_end+1):
+                        dt =  time_dict['green'][t] - t_start
+                        cont_coord_list_g[b][t] = cont_coord_list_g[b][g_start] + d_yx_tot * dt
+                        cont_coord_list_g[b][t] = self.round_cord(cont_coord_list_g[b][t])
+                    if start == anchors.shape[0]-2:
+                        for t in range(g_end+1, self.g_length):
+                            dt =  time_dict['green'][t] - t_start
+                            cont_coord_list_g[b][t] = cont_coord_list_g[b][g_start] + d_yx_tot * dt
+                            cont_coord_list_g[b][t] = self.round_cord(cont_coord_list_g[b][t])
+
+
+                #b
+                if self.b_exists:
+                    b_start = np.searchsorted(time_dict['blue'], t_start)
+                    b_end = np.searchsorted(time_dict['blue'], t_end)
+                    cont_coord_list_b[b][0] = tot_coord_list_drift[0][b]
+                    for t in range(b_start, b_end+1):
+                        dt =  time_dict['blue'][t] - t_start
+                        cont_coord_list_b[b][t] = cont_coord_list_b[b][b_start] + d_yx_tot * dt
+                        cont_coord_list_b[b][t] = self.round_cord(cont_coord_list_b[b][t])
+
+                    if start == anchors.shape[0]-2:
+                        for t in range(b_end+1, self.b_length):
+                            dt =  time_dict['blue'][t] - t_start
+                            cont_coord_list_b[b][t] = cont_coord_list_b[b][b_start] + d_yx_tot * dt
+                            cont_coord_list_b[b][t] = self.round_cord(cont_coord_list_b[b][t])
+
+
+        coord_list = {'red' : cont_coord_list_r,
+                      'green' : cont_coord_list_g,
+                      'blue' : cont_coord_list_b
+                      }
+        breakpoint()
+        return coord_list
 
 
     def cal_intensity(self, coord_list, maxf = 35000, minf = 32946, fsc = None):
         
         print('Calcultating Intensities')
-        i=0
 
-        trace_gg = np.zeros((1000,int(self.g_length)))
-        trace_gr = np.zeros((1000,int(self.g_length)))
-        trace_rr = np.zeros((1000,int(self.r_length)))
-        trace_bb = np.zeros((1000,int(self.b_length)))
-        trace_bg = np.zeros((1000,int(self.b_length)))
-        trace_br = np.zeros((1000,int(self.b_length)))
         total_blobs = len(coord_list)
+        trace_gg = np.zeros((total_blobs, int(self.g_length)))
+        trace_gr = np.zeros((total_blobs, int(self.g_length)))
+        trace_rr = np.zeros((total_blobs, int(self.r_length)))
+        trace_bb = np.zeros((total_blobs, int(self.b_length)))
+        trace_bg = np.zeros((total_blobs, int(self.b_length)))
+        trace_br = np.zeros((total_blobs, int(self.b_length)))
+
+        b_snap = np.zeros((total_blobs, 3, self.b_length, 9, 9))
+        g_snap = np.zeros((total_blobs, 2, self.g_length, 9, 9))
+        r_snap = np.zeros((total_blobs, 1, self.r_length, 9, 9))
+
+        if self.g_exists == 1:
+            bac_g = self.bac_g
+            image_g = (self.image_g - bac_g).astype(np.float32)
+        
+        if self.r_exists == 1:
+            bac_r = self.bac_r
+            image_r = (self.image_r - bac_r).astype(np.float32)
+        
+        if self.b_exists == 1:
+            bac_b = self.bac_b
+            image_b = (self.image_b - bac_b).astype(np.float32)
+
+
+        self.cpath=os.path.join(self.path,r'circled')
+        os.makedirs(self.cpath+f'\\{self.n_pro}', exist_ok=True)
+        for blob_count, blob in enumerate(tqdm(coord_list)):
+
+            try:
+                fsc.set("cal_progress", str(blob_count / (len(coord_list)-1)))
+            except:
+                pass
+
+            yr, xr, yg, xg, yb, xb, ymr, xmr, ymg, xmg, ymb, xmb = blob
+            r = 3
+
+            
+            yr = int(yr)
+            xr = int(xr)
+            yg = int(yg)
+            xg = int(xg)
+            yb = int(yb)
+            xb = int(xb)
+
+
+            if self.r_exists ==1:
+                srr = 2 * self.gaussian_peaks(ymr, xmr)
+
+                trace_rr[blob_count]  = np.einsum('tyx, yx -> t', image_r[:, yr-r:yr+r+1,xr-r:xr+r+1], srr, optimize = False) 
+                
+                r_snap[blob_count][0] = self.image_r[:, yr-4:yr+4+1,xr-4:xr+4+1]
+
+
+            if self.g_exists ==1:
+                sgg = 2 * self.gaussian_peaks(ymg, xmg)
+                sgr = 2 * self.gaussian_peaks(ymr, xmr)
+
+                trace_gg[blob_count]  = np.einsum('tyx, yx -> t', image_g[:, yg-r:yg+r+1,xg-r:xg+r+1], sgg, optimize = False)
+                trace_gr[blob_count]  = np.einsum('tyx, yx -> t', image_g[:, yr-r:yr+r+1,xr-r:xr+r+1], sgr, optimize = False) 
+
+                g_snap[blob_count][0] = self.image_g[:, yg-4:yg+4+1,xg-4:xg+4+1]
+                g_snap[blob_count][1] = self.image_g[:, yr-4:yr+4+1,xr-4:xr+4+1]
+
+                    
+              
+            if  self.b_exists == 1:
+                sbb = 2 *self.gaussian_peaks(ymb, xmb)
+                sbg = 2 *self.gaussian_peaks(ymg, xmg)
+                sbr = 2 *self.gaussian_peaks(ymr, xmr)
+
+                trace_bb[blob_count] = np.einsum('tyx, yx -> t', image_b[:, yb-r:yb+r+1,xb-r:xb+r+1], sbb, optimize = False)
+                trace_bg[blob_count] = np.einsum('tyx, yx -> t', image_b[:, yg-r:yg+r+1,xg-r:xg+r+1], sbg, optimize = False)
+                trace_br[blob_count] = np.einsum('tyx, yx -> t', image_b[:, yr-r:yr+r+1,xr-r:xr+r+1], sbr, optimize = False) 
+
+                b_snap[blob_count][0] = self.image_b[:, yb-4:yb+4+1,xb-4:xb+4+1]
+                b_snap[blob_count][1] = self.image_b[:, yg-4:yg+4+1,xg-4:xg+4+1]
+                b_snap[blob_count][2] = self.image_b[:, yr-4:yr+4+1,xr-4:xr+4+1]
+             
+        
+        np.savez(self.path + r'\blobs.npz', b = b_snap, g = g_snap, r = r_snap, minf = minf, maxf = maxf)
+        
+        return trace_gg, trace_gr, trace_rr, trace_bb, trace_bg, trace_br, blob_count+1
+    
+
+    def cal_intensity_drift(self, coord_list, maxf = 35000, minf = 32946, fsc = None):
+        
+        print('Calcultating Intensities')
+        i=0
+        total_blobs = coord_list['green'].shape[0]
+        trace_gg = np.zeros((total_blobs, int(self.g_length)))
+        trace_gr = np.zeros((total_blobs, int(self.g_length)))
+        trace_rr = np.zeros((total_blobs, int(self.r_length)))
+        trace_bb = np.zeros((total_blobs, int(self.b_length)))
+        trace_bg = np.zeros((total_blobs, int(self.b_length)))
+        trace_br = np.zeros((total_blobs, int(self.b_length)))
+
         b_snap = np.zeros((total_blobs, 3, self.b_length, 9, 9))
         g_snap = np.zeros((total_blobs, 2, self.g_length, 9, 9))
         r_snap = np.zeros((total_blobs, 1, self.r_length, 9, 9))
@@ -609,16 +766,15 @@ class Image_Loader():
                 b_snap[blob_count][2] = self.image_b[:, yr-4:yr+4+1,xr-4:xr+4+1]
 
             i = i+1
+
              
-        trace_gg = trace_gg[0:i]
-        trace_gr = trace_gr[0:i]
-        trace_rr = trace_rr[0:i]
-        trace_bb = trace_bb[0:i]
-        trace_bg = trace_bg[0:i]
-        trace_br = trace_br[0:i]
-        
+
+
         np.savez(self.path + r'\blobs.npz', b = b_snap, g = g_snap, r = r_snap, minf = minf, maxf = maxf)
         
         return trace_gg, trace_gr, trace_rr, trace_bb, trace_bg, trace_br, i
+        
+        
+
         
         

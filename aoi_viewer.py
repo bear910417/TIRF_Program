@@ -136,7 +136,7 @@ app.layout = html.Div([
 
                     html.Div([
                         html.Div('Mapping Path : '),
-                        dcc.Input(value= mpath, id="mpath", type="text", placeholder="", style={'textAlign': 'left'}, size= '42', persistence = True),
+                        dcc.Input(id="mpath", type="text", placeholder="", style={'textAlign': 'left'}, size= '42', persistence = True),
                         html.Div('Plot: ', style={"margin-left": "10px", "margin-right": "10px"}),
                         daq.ToggleSwitch(
                                             id = 'plot_circle',
@@ -404,6 +404,7 @@ def update_fig(clickData, relayout, blob, up, down, left, right, frame, anchor, 
         loader.gen_dimg(anchor = anchor, mpath = mpath, maxf = maxf, minf = minf, laser = channel, plot = False)
         blob_list = loader.det_blob(plot = plot, fsc = fsc, thres = thres, r = radius, redchi_thres = int(redchi), ratio_thres = float(ratio_thres))
         coord_list = []
+        print(len(blob_list))
         for b in blob_list:
             coord_list.append(b.get_coord())
         coord_list = np.array(coord_list)

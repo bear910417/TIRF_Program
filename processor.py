@@ -11,6 +11,7 @@ class Processor:
         self.leakage_b = proc_config['leakage_b']
         self.gamma_g = 1 
         self.gamma_b = 1
+        self.direct_bg = 0
         self.path = proc_config['path']
         self.lag = 1
         self.ti = proc_config['ti']
@@ -138,8 +139,8 @@ class Processor:
         avg_gg = self.avg_gg
         avg_gr = self.avg_gr - self.leakage_g * self.avg_gg
         avg_bb = self.avg_bb
-        avg_bg = self.avg_bg - self.leakage_b * self.avg_bb
-        avg_br = self.avg_br - self.leakage_g * self.avg_bg
+        avg_bg = self.avg_bg - self.leakage_b * self.avg_bb - self.direct_bg * self.avg_gg 
+        avg_br = self.avg_br - self.leakage_g * self.avg_bg - self.direct_bg * self.avg_gr 
         avg_rr = self.avg_rr
 
         
@@ -179,7 +180,7 @@ class Processor:
 
         for t_num in range(self.N_traces):
             try:
-                if (np.average(avg_gg[t_num][self.green_time[0]:self.green_time[1]] + avg_rr[t_num][self.green_time[0]:self.green_time[1]]) <= self.green_intensity) and self.green == 1:
+                if (np.average(avg_bb[t_num] + avg_bg[t_num] + avg_br[t_num]) <= self.green_intensity) and self.green == 1:
                     self.selected_b[t_num] = -1
             except:
                 if t_num == 0 :

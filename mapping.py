@@ -118,11 +118,12 @@ class Glimpse_mapping:
         aves = scipy.ndimage.filters.uniform_filter(aves,size=21,mode='nearest')
         bac=aves
 
-        maxf=33188
-        minf=32946
+        maxf=33722
+        #minf=32946
 
-        maxf=np.max(frame)
-        minf=np.min(frame)
+        maxf = np.max(frame)
+        #print(maxf)
+        minf = np.min(frame)
 
         frame=rescale_intensity(frame,in_range=(minf,maxf),out_range=np.ubyte)
 

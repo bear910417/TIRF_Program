@@ -12,10 +12,10 @@ im = Image_Loader(0, 9, path, g_length, r_length, b_length, 0, 0, 0, 0)
 im.load_image()
 im.gen_dimg(anchor = 0, mpath = mpath, maxf = 420, minf = 178, laser = 'green', plot = False)
 blob_list = im.det_blob()
-print(blob_list[150].get_coord())
-tot_coord_list_drift, anchors = im.cal_drift(blob_list, laser = 'green', use_ch = 'all', n_slices = 8)
-for coord_list_drift in tot_coord_list_drift:
-    print(coord_list_drift[150])
+coord_list = im.cal_drift(blob_list, laser = 'green', use_ch = 'all', n_slices = 4)
+
+trace_gg, trace_gr, trace_rr, trace_bb, trace_bg, trace_br, i = im.cal_intensity(coord_list)
+
 
 # trace_gg, trace_gr, trace_rr, trace_bb, trace_bg, trace_br, i = im.cal_intensity(coord_list, maxf = 420, minf = 178, fsc = None)
 
