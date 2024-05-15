@@ -54,6 +54,7 @@ def make_app(fig, fig_blob, fig2):
                     html.Button('Next', id='next', accessKey = 'w'), 
                     html.Button('Good', id='set_good'),
                     html.Button('Bad', id='set_bad'),
+                    html.Button('Colocalized', id='set_colocalized'),
                     html.Button('Save Selected', id='select')],
                     style={"margin-left": "60px",'padding': 5, 'flex': 1.5}),   
 
@@ -143,6 +144,8 @@ def make_app(fig, fig_blob, fig2):
                 daq.ToggleSwitch(id = 'hmm_fix', value = 0, color = 'green', style={"margin-left": "10px"}),
                 html.Div('Plot:', style={"margin-left": "10px"}),
                 daq.ToggleSwitch(id = 'hmm_plot', value = 0, color = 'green', style={"margin-left": "10px"}),
+                html.Div('n_iter:', style={"margin-left": "10px"}),
+                dcc.Input(20, id="hmm_niter", type="number", placeholder="", style={'textAlign': 'left', 'width': '50px'}, persistence = 'True'),
             ],style={'padding': 5,"margin-left": "60px", 'display': 'flex', 'flex-direction': 'row'}),
 
             html.Div([
@@ -199,8 +202,8 @@ def make_app(fig, fig_blob, fig2):
             ),
             html.Div('Cov Type: '),
             dcc.RadioItems(
-                        ['spherical', 'diag', 'tied'],
-                        'spherical',
+                        ['full', 'spherical', 'diag', 'tied'],
+                        'full',
                         id='gmm_cov_type',
                         labelStyle={'display': 'inline-block', "margin-left": "20px"}
                     ),

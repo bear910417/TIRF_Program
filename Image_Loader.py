@@ -309,7 +309,7 @@ class Image_Loader():
     
     
     
-    def gen_dimg(self, anchor, mpath, maxf = 420, minf = 178, laser = 'green', plot = True):
+    def gen_dimg(self, anchor, mpath, maxf = 420, minf = 178, laser = 'green', average_frame = 20):
         
         if mpath == None:
             mpath = self.mpath
@@ -318,28 +318,27 @@ class Image_Loader():
         dframe_g = 0
         dframe_b = 0
         dframe_r = 0
-        nframes = 20
 
         if  (self.r_exists == 1):
-            end = min(self.image_r.shape[0], anchor+nframes)
-            start = max(0, end - nframes)
+            end = min(self.image_r.shape[0], anchor + average_frame)
+            start = max(0, end - average_frame)
             frame_r = np.average(self.image_r[start:end], axis = 0)
             frame_r = rescale_intensity(frame_r,in_range = (minf,maxf), out_range=np.ubyte)
             dframe_r = bm3d.bm3d(frame_r, 6, stage_arg = bm3d.BM3DStages.HARD_THRESHOLDING)
         
         if  (self.g_exists == 1):
-            end = min(self.image_g.shape[0], anchor+nframes)
-            start = max(0, end - nframes)
+            end = min(self.image_g.shape[0], anchor + average_frame)
+            start = max(0, end - average_frame)
             frame_g = np.average(self.image_g[start:end], axis = 0)
             frame_g = rescale_intensity(frame_g, in_range = (minf,maxf), out_range = np.ubyte)
             dframe_g = bm3d.bm3d(frame_g, 6, stage_arg = bm3d.BM3DStages.HARD_THRESHOLDING)
 
 
         if  (self.b_exists == 1):
-            end = min(self.image_b.shape[0], anchor+nframes)
-            start = max(0, end - nframes)
+            end = min(self.image_b.shape[0], anchor + average_frame)
+            start = max(0, end - average_frame)
             frame_b = np.average(self.image_b[start:end], axis = 0)
-            frame_b = rescale_intensity(frame_b,in_range = (minf,maxf), out_range=np.ubyte)
+            frame_b = rescale_intensity(frame_b,in_range = (minf,maxf), out_range = np.ubyte)
             dframe_b = bm3d.bm3d(frame_b, 6, stage_arg = bm3d.BM3DStages.HARD_THRESHOLDING)
 
 
@@ -393,12 +392,12 @@ class Image_Loader():
 
     
     
-    def det_blob(self, plot = False, fsc = None, thres = None, r = 3, redchi_thres = 400, ratio_thres = 1.3):
+    def det_blob(self, plot = False, fsc = None, thres = None, r = 3, ratio_thres = 1.3):
         if thres != None:
             self.thres = thres
 
         print('Finding blobs')      
-        blobs_dog = blob_dog(self.dcombined_image, min_sigma= (r-1) /sqrt(2), max_sigma = r /sqrt(2), threshold=self.thres, overlap=0, exclude_border = 2)
+        blobs_dog = blob_dog(self.dcombined_image, min_sigma= (r-1) /sqrt(2), max_sigma = r /sqrt(2), threshold = self.thres, overlap = 0, exclude_border = 2)
         print(f'Found {blobs_dog.shape[0]} preliminary blobs')
 
         if plot == True:
@@ -444,7 +443,7 @@ class Image_Loader():
             if self.b_exists:
                 b.gaussian_fit(ch = 'blue')
 
-            b.check_fit(redchi_thres, ratio_thres)
+            b.check_fit(ratio_thres)
 
             if b.quality == 1:
                 #coord_list.append(b.get_coord())

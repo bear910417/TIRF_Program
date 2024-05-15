@@ -41,8 +41,8 @@ def y_affine(xy,a2,b2,c2):
     y1 = a2 * x + b2 * y + c2
     
     return y1
-path = r'H:\TIRF\20231215_mapping\1'
-modes = ['g', 'b']
+path = r'H:\TIRF\20240101_mapping\1'
+modes = ['g', 'r']
 segs = 4
 n = 12
 mapper = Glimpse_mapping(path)
@@ -53,7 +53,7 @@ f_xo = []
 
 for seg in range (0, n):
     
-    print(f'processing {seg} / {n-1}')
+    print(f'processing {seg+1} / {n}')
     coord = []
     image = []
     for mode in modes:
@@ -156,8 +156,8 @@ for seg in range (0, n):
     M = [poptx, popty]
     print(M)
     
-if not os.path.exists(path+r'\\circled'):
-    os.makedirs(path+r'\\circled')
+if not os.path.exists(path+f'\\circled_{modes[0]}_{modes[1]}'):
+    os.makedirs(path+f'\\circled_{modes[0]}_{modes[1]}')
     
 i=0     
 for blob in tqdm(coord[0]):
@@ -184,7 +184,7 @@ for blob in tqdm(coord[0]):
         axes[1].imshow(t_aoi,cmap='Greys_r',vmin=0,vmax=128)
         axes[0].set_title(f'{np.sum(aoi):.2f}')
         axes[1].set_title(f'{np.sum(t_aoi):.2f}')
-        plt.savefig(path + f'\\circled\\{i}.tif')
+        plt.savefig(path + f'\\circled_{modes[0]}_{modes[1]}\\{i}.tif')
         #plt.show()
         plt.close()      
 

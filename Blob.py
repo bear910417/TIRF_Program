@@ -159,12 +159,12 @@ class Blob():
                 self.coords[ch] = np.round(self.coords[ch])
                 
 
-    def check_fit(self, redchi_thres, ratio_thres):
+    def check_fit(self, ratio_thres):
         for ch in range(0, 3):
-            c1 = (self.redchi[ch] <  redchi_thres or (self.sigma[ch][0] < 3.6 and self.sigma[ch][1] < 3.6)) 
-            c2 = self.redchi[ch] <  redchi_thres * 2
+            #c1 = (self.redchi[ch] <  redchi_thres or (self.sigma[ch][0] < 3.6 and self.sigma[ch][1] < 3.6)) 
+            #c2 = self.redchi[ch] <  redchi_thres * 2
             c3 = ((max(self.sigma[ch]) / min(self.sigma[ch])) < (max(1, ratio_thres) / min(1, ratio_thres))) or (not np.any(self.sigma[ch]))
-            if not(c1 and c2 and c3):
+            if not(c3):
                 self.quality = 0
 
 

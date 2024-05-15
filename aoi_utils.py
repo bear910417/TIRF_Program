@@ -59,12 +59,12 @@ def draw_blobs(fig, coord_list, r, reverse):
         color ='yellow'
 
     try:
-        fig.update_traces(x=coord_list[:, 1],y=coord_list[:, 0], marker = dict(size = 2 * r + 1,  line=dict(width=2), color = color), selector=dict(name='blobs_g'))
-        fig.update_traces(x=coord_list[:, 3],y=coord_list[:, 2], marker = dict(size = 2 * r + 1,  line=dict(width=2), color = color), selector=dict(name='blobs_r'))
+        fig.update_traces(x=coord_list[:, 1],y=coord_list[:, 0], marker = dict(size = 2 * r + 1,  line=dict(width=2), color = color), selector=dict(name='blobs_r'))
+        fig.update_traces(x=coord_list[:, 3],y=coord_list[:, 2], marker = dict(size = 2 * r + 1,  line=dict(width=2), color = color), selector=dict(name='blobs_g'))
         fig.update_traces(x=coord_list[:, 5],y=coord_list[:, 4], marker = dict(size = 2 * r + 1,  line=dict(width=2), color = color), selector=dict(name='blobs_b'))
     except:
-        fig.update_traces(x = [], y = [], marker = dict(size = 2 * r + 1,  line=dict(width=2)), selector=dict(name='blobs_g'))
         fig.update_traces(x = [], y = [], marker = dict(size = 2 * r + 1,  line=dict(width=2)), selector=dict(name='blobs_r'))
+        fig.update_traces(x = [], y = [], marker = dict(size = 2 * r + 1,  line=dict(width=2)), selector=dict(name='blobs_g'))
         fig.update_traces(x = [], y = [], marker = dict(size = 2 * r + 1,  line=dict(width=2)), selector=dict(name='blobs_b'))
 
 
@@ -72,10 +72,10 @@ def draw_blobs(fig, coord_list, r, reverse):
 
 def move_blobs(coord_list, selector, step, changed_id):
     if ('up' in changed_id):
-        if selector == 'green':   
+        if selector == 'channel_r':   
             for i in range(coord_list.shape[0]):
                 coord_list[i][0] -= step
-        elif selector =='red':   
+        elif selector =='channel_g':   
             for i in range(coord_list.shape[0]):
                 coord_list[i][2] -= step   
         else:
@@ -83,10 +83,10 @@ def move_blobs(coord_list, selector, step, changed_id):
                 coord_list[i][4] -= step        
 
     if ('down' in changed_id):
-        if selector == 'green':   
+        if selector == 'channel_r':   
             for i in range(coord_list.shape[0]):
                 coord_list[i][0] += step
-        elif selector =='red':   
+        elif selector =='channel_g':   
             for i in range(coord_list.shape[0]):
                 coord_list[i][2] += step  
         else:
@@ -94,10 +94,10 @@ def move_blobs(coord_list, selector, step, changed_id):
                 coord_list[i][4] += step   
  
     if ('left' in changed_id):
-        if selector == 'green':   
+        if selector == 'channel_r':   
             for i in range(coord_list.shape[0]):
                 coord_list[i][1] -= step
-        elif selector =='red':   
+        elif selector =='channel_g':   
             for i in range(coord_list.shape[0]):
                 coord_list[i][3] -= step  
         else:
@@ -106,10 +106,10 @@ def move_blobs(coord_list, selector, step, changed_id):
 
     if ('right' in changed_id):
 
-        if selector == 'green':   
+        if selector == 'channel_r':   
             for i in range(coord_list.shape[0]):
                 coord_list[i][1] += step
-        elif selector =='red':   
+        elif selector =='channel_g':   
             for i in range(coord_list.shape[0]):
                 coord_list[i][3] += step  
         else:

@@ -51,8 +51,13 @@ class GMM():
         for i, trace in enumerate(self.data):
             if self.selected[i]!=-1:
                 X0.append(uf(trace, smooth))
-        
-        X = np.array(X0).reshape(-1,1)
+
+
+        X = np.array(X0).reshape(-1)
+        X = X[X<=1.2]
+        X = X[X>=-0.2]
+        X = X.reshape(-1, 1)
+
 
         np.random.seed(seed)
 
@@ -64,9 +69,15 @@ class GMM():
         gmm.fit(X)
 
 
+
+
         means = gmm.means_
         cov = gmm.covariances_
         weights = gmm.weights_
+
+        print(means)
+        print(cov)
+        print(covariance_type)
 
         
         self.means = means.flatten()
@@ -110,9 +121,9 @@ class GMM():
                 print(f'Ignored {np.round(m[i],2)} state.')
 
         plt.plot(xspace, yconv, color='orange', linewidth = 1.5, label=r'Fitted function')
-        plt.xticks(np.arange(0,1.1,0.1)) 
+        plt.xticks(np.arange(-0.2, 1.1,0.1)) 
         plt.yticks(np.arange(0,10.1,1)) 
-        plt.xlim(0,1)
+        plt.xlim(-0.2, 1)
         plt.ylim(0,ylim)
         plt.xlabel('FRET Efficency', fontdict=font)
         plt.ylabel('Probability Density', fontdict=font)

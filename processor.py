@@ -1,6 +1,7 @@
 from scipy.ndimage import uniform_filter1d as uf
 import numpy as np
 import os
+import matplotlib.pyplot as plt
 
 
 class Processor:
@@ -9,7 +10,7 @@ class Processor:
         self.n = n
         self.leakage_g = proc_config['leakage_g']
         self.leakage_b = proc_config['leakage_b']
-        self.gamma_g = 1 
+        self.gamma_g = 1
         self.gamma_b = 1
         self.direct_bg = 0
         self.path = proc_config['path']
@@ -127,6 +128,17 @@ class Processor:
         
         
 
+    def plot_intensity(self, data, title):
+        plt.hist(data.reshape(-1), bins = np.arange(-2000, 40000, 2000), density = True, color= 'purple')
+        plt.ylabel('Probability Density')
+        plt.xlabel('Intensity')
+        plt.title(title)
+        plt.tight_layout()
+        path = os.path.join(self.path,'total_intensity')
+        if not os.path.exists(path):
+            os.makedirs(path)
+        plt.savefig(path+f'\\{title}.tif')
+        plt.close()
 
     def process_data(self):
 
@@ -139,8 +151,8 @@ class Processor:
         avg_gg = self.avg_gg
         avg_gr = self.avg_gr - self.leakage_g * self.avg_gg
         avg_bb = self.avg_bb
-        avg_bg = self.avg_bg - self.leakage_b * self.avg_bb - self.direct_bg * self.avg_gg 
-        avg_br = self.avg_br - self.leakage_g * self.avg_bg - self.direct_bg * self.avg_gr 
+        avg_bg = self.avg_bg - self.leakage_b * self.avg_bb #- self.direct_bg * self.avg_gg 
+        avg_br = self.avg_br - self.leakage_g * self.avg_bg #- self.direct_bg * self.avg_gr 
         avg_rr = self.avg_rr
 
         
@@ -204,6 +216,18 @@ class Processor:
         self.avg_br = avg_br
         self.fret_g = fret_g
         self.fret_b = fret_b
+
+        print('plotting total intensities')
+        self.plot_intensity(avg_gg, 'avg_gg')
+        self.plot_intensity(avg_gr, 'avg_gr')
+        self.plot_intensity(avg_gg + avg_gr, 'total_g')
+
+        self.plot_intensity(avg_bb, 'avg_bb')
+        self.plot_intensity(avg_bg, 'avg_bg')
+        self.plot_intensity(avg_br, 'avg_br')
+        self.plot_intensity(avg_bb + avg_bg + avg_br, 'total_b')
+
+
         path = self.path + f'//FRET//{self.n}'
 
         if not os.path.exists(path):

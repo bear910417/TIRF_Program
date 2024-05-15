@@ -49,6 +49,11 @@ class Loader :
             select_list_g = np.load(self.path + r'\selected_g.npy', allow_pickle=True)
         except:
             select_list_g = np.zeros(N_traces)
+
+        try:
+            colocalized_list = np.load(self.path + r'\colocalized_list.npy', allow_pickle=True)
+        except:
+            colocalized_list = np.zeros(N_traces)
         
         blob_path = (Path(self.path).parent.parent.absolute()) / 'blobs.npz'
         try:
@@ -74,5 +79,5 @@ class Loader :
         if np.any(rr):
             ch_label.append('r')
 
-        return fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b, N_traces, total_frame, bkps, select_list_g, ch_label, blobs, hmm_fret_g
+        return fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b, N_traces, total_frame, bkps, select_list_g, colocalized_list, ch_label, blobs, hmm_fret_g
     

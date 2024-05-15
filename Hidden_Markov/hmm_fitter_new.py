@@ -29,10 +29,10 @@ class HMM_fitter:
         return Q
     
     
-    def process_Q(self):
+    def process_Q(self, w = 10):
        
-        Q = uf(self.Q, 10, mode = 'reflect', axis = 1)
-        Q = np.clip(Q, 0.4, 0.99)
+        Q = uf(self.Q, w, mode = 'reflect', axis = 1)
+        Q = np.clip(Q, 0.01, 0.99)
         #Q = np.log(Q)
         N_traces = Q.shape[0]
         pro_Q = np.zeros(0)
@@ -56,14 +56,15 @@ class HMM_fitter:
         return N_traces, length
             
           
-    def fitHMM(self, r, means = None, fix_means = False, epoch = 10, covariance_type = 'spherical'):
+    def fitHMM(self, r, w = 10, means = None, fix_means = False, epoch = 10, covariance_type = 'spherical', n_iter = 20):
         # fit Gaussian HMM to Q
-        N_traces, length = self.process_Q()
-        if means == None:
+        N_traces, length = self.process_Q(w)
+        if not np.any(means):
             means = [0.5]
 
         self.means = means
         means = np.array(means)
+
         k = means.shape[0]
         #means = np.log(means)
         if fix_means:
@@ -79,7 +80,7 @@ class HMM_fitter:
 
             for e in tqdm(range(epoch)):
                 print(f'\n Epoch {e}')
-                model = GaussianHMM(n_components = k, n_iter = 30, verbose = True, min_covar= 100, covariance_type = covariance_type, covars_prior = 0.002, transmat_prior = 0, init_params='stc', params = params)  
+                model = GaussianHMM(n_components = k, n_iter = n_iter, verbose = True, min_covar = 0, startprob_prior = np.ones(k) / k, means_prior = means, covars_prior = 0.00001, covariance_type = covariance_type, transmat_prior = 0.01, init_params='stc', params = params, implementation = 'scaling')  
                 model.means_ = means
                 model.fit(self.pro_Q, length)
                 models.append(model)
@@ -92,7 +93,7 @@ class HMM_fitter:
             with open(self.path+r"\model.pkl", "wb") as file: pickle.dump(model, file)
 
         else:
-            model = GaussianHMM(n_components = k, n_iter = 30, verbose = True, min_covar= 100, covariance_type = covariance_type, covars_prior = 0.002, transmat_prior = 0, init_params='stc', params = params)  
+            model = GaussianHMM(n_components = k, n_iter = 10, verbose = True, min_covar= 100, covariance_type = covariance_type, covars_prior = 0.001, transmat_prior = 0, init_params='stc', params = params)  
             with open(self.path+r"\model.pkl", "rb") as file: model=pickle.load(file)
             #with open(r'H:\TIRF\20221229\lane3\dmc1\320s\FRET\0'+r"\model.pkl", "rb") as file: model=pickle.load(file)
             #with open(r'H:\TIRF\20221229\lane2\dmc1\530s\FRET\0'+r"\model.pkl", "rb") as file: model=pickle.load(file)
@@ -110,9 +111,16 @@ class HMM_fitter:
         print('predicting')
         tic = time.perf_counter()
         hidden_states = model.predict(self.pro_Q, length)
+        likelihood = model.predict(self.pro_Q, length)
+        aic = model.aic(self.pro_Q, length)
+        bic = model.bic(self.pro_Q, length)
         
         toc = time.perf_counter()
         print(f"Finished in {toc - tic:0.4f} seconds")
+        print(f"Log Likelihood =  {np.sum(likelihood):.4f}")
+        print(f"averaged Log Likelihood =  {np.average(likelihood):.4f}")
+        print(f"AIC =  {aic:.4f}")
+        print(f"aBIC =  {bic:.4f}")
         
         
         self.hidden_states = hidden_states

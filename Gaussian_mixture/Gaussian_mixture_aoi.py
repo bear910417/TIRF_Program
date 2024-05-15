@@ -55,7 +55,7 @@ class GMM:
                     else:
                         end = trace.shape[0]
                     for t in range(0, end):
-                        if (0<=trace[t]<=1):
+                        if (-0.2 <= trace[t] <= 1.2):
                             X0.append(trace[t])
                   
             X = np.array(X0).reshape(-1,1)
@@ -87,6 +87,7 @@ class GMM:
                     means.append(gmm.means_)
                     cov.append(gmm.covariances_)
                     weights.append(gmm.weights_)
+
                     
                         
             #print(means)
@@ -145,10 +146,10 @@ class GMM:
                 plt.clf()
                 
                 yconv=np.zeros((100000))
-                data_entries, bins = np.histogram(X, bins=np.arange(0,1,0.01), density=True)
+                data_entries, bins = np.histogram(X, bins=np.arange(-0.2,1,0.01), density=True)
                 binscenters = np.array([0.5 * (bins[i] + bins[i+1]) for i in range(len(bins)-1)]) 
                 plt.bar(binscenters, data_entries, width=bins[1] - bins[0], color='wheat', label=r'Histogram entries')
-                xspace = np.linspace(0, 1, 100000)
+                xspace = np.linspace(-0.2, 1, 100000)
                 for i in range(0,n_state):
                     if np.round(m[i],2) not in ignore:
                       tot = tot+np.round(w[i],2)
@@ -164,9 +165,9 @@ class GMM:
                             plt.text(m[i]-0.02,5,str(np.round(m[i],2)),multialignment ='center', fontdict=font)
                             plt.text(m[i]-0.02,3,str(np.round(w[i]/tot,2)),multialignment ='center',color='orange', fontdict=font)
                 plt.plot(xspace, yconv, color='orange', linewidth=2.5, label=r'Fitted function')
-                plt.xticks(np.arange(0,1.1,0.1)) 
+                plt.xticks(np.arange(0,1,0.1)) 
                 plt.yticks(np.arange(0,10.1,1)) 
-                plt.xlim(0,1)
+                plt.xlim(0, 1)
                 plt.ylim(0,10)
                 plt.xlabel('FRET Efficency', fontdict=font)
                 plt.ylabel('Probability Density', fontdict=font)

@@ -8,7 +8,7 @@ from rupture import Rupture
 from draw import draw
 from dash.exceptions import PreventUpdate
 from layout import make_app
-from utils import update_trace, change_trace, select_good_bad, breakpoints_utils, render_good_bad, sl_bkps, find_chp, show_blob
+from utils import update_trace, change_trace, select_good_bad, select_colocalized, breakpoints_utils, render_good_bad, render_colocalized, sl_bkps, find_chp, show_blob
 from utils import fit_gmm, draw_gmm, save_gmm
 from init_fig import init_fig
 
@@ -31,6 +31,7 @@ hmm_fret_g = np.zeros(1000)
 tot_g = gg + gr
 tot_b = bb + bg + br
 select_list_g = np.zeros(0)
+colocalized_list = np.zeros(0)
 bmode = 1
 N_traces = 0
 total_frame = 0
@@ -78,6 +79,7 @@ app = make_app(fig, fig_blob, fig2)
     Output('N_traces','children'),
     Output('set_good','style'),
     Output('set_bad','style'),
+    Output('set_colocalized','style'),
     Output('channel', 'options'),
     Output('chp_channel_0', 'options'),
     Output('chp_channel_1', 'options'),
@@ -98,6 +100,7 @@ app = make_app(fig, fig_blob, fig2)
     Input('rupture','n_clicks'),
     Input('set_good','n_clicks'),
     Input('set_bad','n_clicks'),
+    Input('set_colocalized','n_clicks'),
     Input('select','n_clicks'),
     Input('scatter', 'value'),
     Input('smooth', 'value'),
@@ -124,14 +127,14 @@ app = make_app(fig, fig_blob, fig2)
     )
 
 
-def update_fig(key_events, show, next, previous, go, dtime, etime, clickData, mode, save, load, loadp, rupture, good, bad, select, scatter, smooth, strided, rescale, relayout, channel, chp_find_0, chp_find_1, confirm_reset, i, path, 
+def update_fig(key_events, show, next, previous, go, dtime, etime, clickData, mode, save, load, loadp, rupture, good, bad, coloc, select, scatter, smooth, strided, rescale, relayout, channel, chp_find_0, chp_find_1, confirm_reset, i, path, 
                chp_mode_0, chp_comp_0, chp_thres_0, chp_channel_0, chp_target_0, chp_mode_1, chp_comp_1, chp_thres_1, chp_channel_1, chp_target_1, event):
     changed_id = [p['prop_id'] for p in callback_context.triggered][0]
     global N_traces, fig, fig2, idx, total_frame, color, good_style, bad_style, bmode
     global new, time_b, N_traces, total_frame, tot_dtime
     global fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b, hmm_fret_g
-    global select_list_g, bkps, ch_label, blobs
-    if ('n_events' in changed_id) and (event['key'] not in ['q','w','z','x']):
+    global select_list_g, colocalized_list, bkps, ch_label, blobs
+    if ('n_events' in changed_id) and (event['key'] not in ['q', 'w', 'z', 'x', 'c']):
         raise PreventUpdate()
 
     if fig['layout']['uirevision'] == False:
@@ -142,7 +145,7 @@ def update_fig(key_events, show, next, previous, go, dtime, etime, clickData, mo
 
     ##load path##
     if 'loadp' in changed_id:
-        fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b, N_traces, total_frame, bkps, select_list_g, ch_label, blobs, hmm_fret_g = Loader(path).load_traces()
+        fret_g, fret_b, rr, gg, gr, bb, bg, br, time, tot_g, tot_b, N_traces, total_frame, bkps, select_list_g, colocalized_list, ch_label, blobs, hmm_fret_g = Loader(path).load_traces()
         tot_dtime = []
         i = 0
         new = 1
@@ -159,11 +162,15 @@ def update_fig(key_events, show, next, previous, go, dtime, etime, clickData, mo
     ##select good bad##
 
     select_list_g = select_good_bad(changed_id, event, i, select_list_g)
-    good_style, bad_style = render_good_bad(i, select_list_g)
+    colocalized_list = select_colocalized(changed_id, event, i, colocalized_list)
 
-    #s#ave select##        
+    good_style, bad_style = render_good_bad(i, select_list_g)
+    colocalized_style = render_colocalized(i, colocalized_list)
+
+    #save select##        
     if 'select' in changed_id:  
         np.save(path+r'/selected_g.npy', select_list_g)
+        np.save(path+r'/colocalized_list.npy', colocalized_list)
      
     ##breakpoints##
     bkps, mode, confirm_reset_show = breakpoints_utils(changed_id, clickData, mode, channel, i, time, bkps, smooth, smooth_mode)
@@ -203,19 +210,19 @@ def update_fig(key_events, show, next, previous, go, dtime, etime, clickData, mo
     nnote='Total_traces: ' + str(N_traces)
 
     
-    return fig, i, str_g_bkps, str_b_bkps, mode, nnote, good_style, bad_style, ch_label, ch_label, ch_label, confirm_reset_show, relayout
+    return fig, i, str_g_bkps, str_b_bkps, mode, nnote, good_style, bad_style, colocalized_style, ch_label, ch_label, ch_label, confirm_reset_show, relayout
 
 
 @app.callback(
     Output('g_blob','figure'),
     Input('graph', 'hoverData'), 
     Input('aoi_max', 'value'),
+    Input('i','value'),
     State('tabs', 'value'), 
     State('smooth', 'value'), 
-    State('i','value'),
     blocking = True  
     )
-def show_blob_main(hoverData, aoi_max, tabs, smooth, i):
+def show_blob_main(hoverData, aoi_max, i, tabs, smooth):
     global fig_blob, time
     if tabs == 'Aois':
         fig_blob = show_blob(blobs, fig_blob, smooth, i, hoverData, time, aoi_max)
@@ -229,16 +236,18 @@ def show_blob_main(hoverData, aoi_max, tabs, smooth, i):
 @app.callback(
     Output('loadp', 'n_clicks'),
     Input('hmm_start', 'n_clicks'),
+    State('smooth', 'value'),
     State('hmm_fit','value'),
     State('hmm_fix','value'),
     State('hmm_plot','value'),
     State('hmm_cov_type', 'value'),
     State('hmm_means', 'data'),
     State('hmm_epoch', 'value'),
+    State('hmm_niter', 'value'),
     State('path','value'),
     blocking = True  
     )
-def HMM(start, fit, fix, plot, cov_type, means, epoch, path):
+def HMM(start, w, fit, fix, plot, cov_type, means, epoch, n_iter, path):
     changed_id = [p['prop_id'] for p in callback_context.triggered][0]
     if 'hmm_start' in changed_id:
         init_means = []
@@ -254,7 +263,7 @@ def HMM(start, fit, fix, plot, cov_type, means, epoch, path):
         if np.any(init_means):
             hfit = HMM_fitter(path)
             hfit.load_traces()
-            hfit.fitHMM(fit, init_means, fix_means = fix, epoch = epoch, covariance_type = cov_type)
+            hfit.fitHMM(fit, w, init_means, fix_means = fix, epoch = epoch, covariance_type = cov_type, n_iter = n_iter)
             hfit.cal_states(plot = plot)    
         return np.random.rand(1)
     else:

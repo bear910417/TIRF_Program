@@ -8,6 +8,7 @@ from Gaussian_mixture.GMM_custom import GMM
 from math import sqrt
 import matplotlib
 import pickle
+import shutil
 
 def uf(t, lag, axis = -1):
     return uniform_filter1d(t, size = lag, mode = 'nearest', axis = axis)
@@ -206,6 +207,32 @@ def select_good_bad(changed_id, event, i, select_list_g):
          
     return select_list_g
 
+def select_colocalized(changed_id, event, i, colocalized_list):
+    
+    
+    if ('set_colocalized' in changed_id) or (('n_events' in changed_id) and event['key'] == 'c'):  
+        if colocalized_list[i] == 1:
+            colocalized_list[i] = 0
+        else:
+            colocalized_list[i] = 1
+         
+    return colocalized_list
+
+def render_colocalized(i, colocalized_list):
+    white_button_style = {'background-color': '#f0f0f0', 'color': 'black'}
+    blue_button_style = {'background-color': 'blue', 'color': 'white'}   
+    if colocalized_list.shape[0] == 0:
+        style = white_button_style
+        return style
+    
+    if colocalized_list[i] == 1:
+        style = blue_button_style
+    elif colocalized_list[i] == 0:
+        style = white_button_style
+
+    return style
+
+
 def render_good_bad(i, select_list_g):
     white_button_style = {'background-color': '#f0f0f0', 'color': 'black'}
     red_button_style = {'background-color': 'red', 'color': 'white'}                        
@@ -350,17 +377,15 @@ def sl_bkps(changed_id, path, bkps, mode):
         # fig.write_image(path+f"/images/trace{i}.png", engine="kaleido",width=1600,height=800,scale=10)
         mode = 'Add'
         try:
-            bkps_bac = np.load(path+r'/breakpoints.npz', allow_pickle=True)
             seconds = rtime.time()
             t = rtime.localtime(seconds)
-            np.savez(path+f'/breakpoints_backup_{t.tm_hour}_{t.tm_min}_{t.tm_sec}.npz', bkps_bac)
+            shutil.copy(path+r'/breakpoints.npz', path+f'/breakpoints_backup_{t.tm_hour}_{t.tm_min}_{t.tm_sec}.npz')    
         except:
             print('No existing save file found.')
         
         for key in bkps:
             bkps[key] = np.array(bkps[key], dtype = object)
 
-        print(path)
         np.savez(path+r'/breakpoints.npz', **bkps)
         print('file_saved')
         
