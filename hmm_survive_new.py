@@ -30,7 +30,6 @@ def process(path):
                 org = np.argwhere(means == trace[trans[j]+1])[0][0]
                 des = np.argwhere(means == trace[trans[j+1]+1])[0][0]
                 dwells.append((dwell, org, des))
-    print(dwells)
     #k on
     kon  = []
     koff  = []
@@ -44,7 +43,9 @@ def process(path):
                 if d[1] == 1 and d[2] == des:
                     dwell_1.append(d[0])
                     d_12 += 1
-          
+
+            if dwell_times == []:
+                dwell_times = [1]
 
             num_events = len(dwell_times)
             #print(num_events)
@@ -87,6 +88,8 @@ def process(path):
 
             num_events = len(dwell_times)
             #print(num_events)
+            if dwell_times == []:
+                dwell_times = [1]
             model = Exponential.fit(x = dwell_times)
             k = model.params[0]
             #print(k)
@@ -126,7 +129,7 @@ def process(path):
     
     return kon, koff
 
-path = r''
+path = r'H:\TIRF\20221229\lane3\dmc1\90s\FRET\1'
 process(path)
 
 
